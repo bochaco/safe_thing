@@ -1,0 +1,79 @@
+@startuml
+title **Use Case: Subscribing to Topics and Receiving Notifications**
+
+participant "Thing A" as thingA
+participant "SAFEoT Framework\nwithin Thing A" as safeotA
+participant "Thing B" as thingB
+participant "SAFEoT Framework\nwithin Thing B" as safeotB
+participant "SAFE Network" as safenet
+
+activate thingA
+thingA -> safeotA: Init(thingA_id)
+activate safeotA
+thingA <-- safeotA: Ok
+thingA -> safeotA: GetThingInfo(thingB_id)
+
+safeotA -> safenet: FetchMD( XoRName(thingB_id) )
+activate safenet
+
+safeotA <-- safenet: Ok(ThingB info)
+deactivate safenet
+
+thingA <-- safeotA: Done(ThingB info, topics,\nstatus = 'published')
+deactivate safeotA
+
+thingA -> safeotA: Subscribe(thingB_id, topic_name, call_back_function)
+activate safeotA
+
+safeotA -> safenet: CreateMD/UpdateMD( XoRName(thingA_id),\ngetSubscriptionsEntry(thingB_id).add(topic_name) )
+activate safenet
+
+safeotA <-- safenet: Ok
+deactivate safenet
+
+safeotA -> safeotA: Add (thingB_id, topic_name) to the cached\nlist of topics to monitor
+
+thingA <-- safeotA: Ok
+deactivate safeotA
+deactivate thingA
+
+...later on...
+thingB -> thingB: Event(topic_name)
+activate thingB
+
+thingB -> safeotB: Notify(topic_name, topic_data)
+activate safeotB
+
+safeotB -> safenet: UpdateMD( XoRName(thingB_id),\ngetTopicEntry(topic_name).addNotification(topic_data) )
+activate safenet
+
+safeotB <-- safenet: Ok
+deactivate safenet
+
+thingB <-- safeotB: Ok
+deactivate safeotB
+deactivate thingB
+
+...
+
+safeotA -> safeotA: Monitor loop tick
+activate safeotA
+
+safeotA -> safeotA: Get cached list\nof topics to monitor
+
+safeotA -> safenet: FetchMD( XoRName(thingB_id),\ngetTopicEntry(topic_name).fetchNotifications() )
+activate safenet
+
+safeotA <-- safenet: Notifications([ (topic_name, topic_data) ] )
+deactivate safenet
+
+thingA <- safeotA: call_back_function(topic_name, topic_data)
+activate thingA
+
+thingA --> safeotA: Ok
+deactivate safeotA
+
+thingA -> thingA: Action based on notification
+deactivate thingA
+
+@enduml

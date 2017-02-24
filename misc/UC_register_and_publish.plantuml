@@ -1,0 +1,66 @@
+@startuml
+title **Use Case: Publishing a Thing**
+
+actor "Thing's Owner" as owner
+participant "Admin Console" as admin
+participant Thing as thing
+participant "SAFEoT Framework" as safeot
+participant "SAFE Network" as safenet
+
+owner -> thing: Plug it
+activate thing
+
+thing -> thing: Display blinking green light\non thing's panel
+thing -> safeot: Init(thing_id)
+activate safeot
+
+thing <-- safeot: Ok
+deactivate safeot
+
+thing -> safeot: Register(thing_id, attributes, topics, ...)
+activate safeot
+
+safeot -> safenet: CreateMD( XoRName(thing_id), attributes,\nstatus = 'registered')
+activate safenet
+
+safeot <-- safenet: Ok
+deactivate safenet
+
+thing <-- safeot: Ok(status = 'registered')
+deactivate safeot
+thing -> thing: Display solid green light\non thing's panel
+deactivate thing
+
+...
+
+owner -> admin: Search(thing_id)
+activate admin
+
+admin -> safeot: GetThingInfo(thing_id)
+activate safeot
+
+admin <-- safeot: Done(Thing info, status = 'registered')
+deactivate safeot
+
+owner <-- admin: Thing's info,\nStatus = 'registered'
+deactivate admin
+
+owner -> admin: Publish(thing_id)
+activate admin
+
+admin -> safeot: Publish(thing_id)
+activate safeot
+
+safeot -> safenet: UpdateMD( XoRName(thing_id),\nstatus = 'published')
+activate safenet
+
+safeot <-- safenet: Ok
+deactivate safenet
+
+admin <-- safeot: Ok(status = 'published')
+deactivate safeot
+
+owner <-- admin: Status = 'published'
+deactivate admin
+
+@enduml
