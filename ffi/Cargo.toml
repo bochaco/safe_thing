@@ -1,0 +1,11 @@
+[package]
+name = "safe_o_t_ffi"
+version = "0.1.0"
+authors = ["Gabriel Viganotti <gabrielviganotti@gmail.com>"]
+
+[dependencies]
+safe_o_t = { path = "../core", version = "~0.1.0" }
+
+[lib]
+name = "safe_o_t"
+crate-type = ["staticlib", "cdylib"]
