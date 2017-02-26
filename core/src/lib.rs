@@ -3,7 +3,7 @@ use std::fmt;
 use std::{time, thread};
 
 mod comm;
-use comm::SAFEoTComm;
+use comm::{SAFEoTComm, ActionArgs};
 
 /// Which set of Things are allow to register to a topic
 /// Thing: access only to the thing's application.
@@ -69,7 +69,7 @@ impl ThingAttr {
 pub struct ActionDef {
     pub name: String,
     pub access: AccessType,
-    pub args: Vec<String> // arg name, the values are opaque for the framework
+    pub args: ActionArgs
 }
 
 impl ActionDef {
@@ -179,6 +179,12 @@ impl SAFEoT {
     pub fn get_thing_info(&self, thing_id: &str) -> Result<ThingInfo, String> {
         // Search on the network by thing_id
         self.storage.clone().ok_or("The thing doesn't contain information".to_owned())
+    }
+
+    /// Send an action request to a Thing and wait for response
+    pub fn action_request(&self, thing_id: &str, action: &str, args: ActionArgs) -> Result<String, String> {
+        // Search on the network by thing_id
+        self.safeot_comm.sendActionRequest(thing_id, action, args).ok_or("Action request failure".to_owned())
     }
 
     /// Subscribe to topics published by a Thing (all data is stored in the network to support device resets/reboots)

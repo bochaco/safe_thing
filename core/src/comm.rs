@@ -20,6 +20,8 @@ struct Subscription {
     filters: Vec<EventFilter>
 }
 
+pub type ActionArgs = Vec<String>; // the values are opaque for the framework
+
 // map of thing_id => vector of Subscription
 type Subscriptions = HashMap<String, Vec<Subscription>>;
 // vector of (topic name, data)
@@ -54,6 +56,12 @@ impl SAFEoTComm {
         self.events.push((String::from(topic), String::from(data)));
         None
     }
+
+    pub fn sendActionRequest(&self, thing_id: &str, action: &str, args: ActionArgs) -> Option<String> {
+        //self.events.push((String::from(topic), String::from(data)));
+        Some(String::from("response"))
+    }
+
 }
 
 
