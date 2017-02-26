@@ -1,6 +1,10 @@
 extern crate safe_o_t;
 
-use safe_o_t::{get_thing_info, publish_thing, ThingInfo, ThingAttr, Topic, ActionDef, AccessType};
+use safe_o_t::{SAFEoT, ThingInfo, ThingAttr, Topic, ActionDef, AccessType};
+
+fn printRequestedNotif(thing_id: &str, topic: &str, data: &str) {
+    println!("Notification received from thing_id: {}, topic: {}, data: {}", thing_id, topic, data)
+}
 
 pub fn main() {
     let id = "sdienfionch439th34t4mtu894u8t34n9834ctn92pt8";
@@ -31,8 +35,26 @@ pub fn main() {
         ActionDef::new("deiverCopy", AccessType::Thing, vec![])
     ];
 
-    let info: ThingInfo = publish_thing(id, attributes, topics, actions);
+    let mut safeot: SAFEoT = SAFEoT::new(id).unwrap();
+    match safeot.get_thing_info(id) {
+        Ok(i) => println!("\nWe got info: {} - Status: {}", i, safeot.status),
+        Err(e) => println!("We got a problem!: {}", e)
+    }
 
-    let info2 = get_thing_info(id);
-    println!("We got info: {} {}", info.id, info.addr_name);
+    safeot.register_thing(attributes, topics, actions);
+    match safeot.get_thing_info(id) {
+        Ok(i) => println!("\nWe got info: {} - Status: {}", i, safeot.status),
+        Err(e) => println!("We got a problem!: {}", e)
+    }
+
+    safeot.publish_thing(id);
+    match safeot.get_thing_info(id) {
+        Ok(i) => println!("\nWe got info: {} - Status: {}", i, safeot.status),
+        Err(e) => println!("We got a problem!: {}", e)
+    }
+
+    safeot.subscribe(id, "printRequested", printRequestedNotif);
+
+    safeot.notify("printRequested", "print job started");
+
 }

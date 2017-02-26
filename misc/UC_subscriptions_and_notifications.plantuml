@@ -67,7 +67,7 @@ activate safenet
 safeotA <-- safenet: Notifications([ (topic_name, topic_data) ] )
 deactivate safenet
 
-thingA <- safeotA: call_back_function(topic_name, topic_data)
+thingA <- safeotA: call_back_function(thingB_id, topic_name, topic_data)
 activate thingA
 
 thingA --> safeotA: Ok

@@ -17,7 +17,7 @@ activate safeot
 thing <-- safeot: Ok
 deactivate safeot
 
-thing -> safeot: Register(thing_id, attributes, topics, ...)
+thing -> safeot: Register(attributes, topics, ...)
 activate safeot
 
 safeot -> safenet: CreateMD( XoRName(thing_id), attributes,\nstatus = 'registered')
