@@ -1,8 +1,10 @@
 extern crate safe_o_t;
 
-use safe_o_t::{SAFEoT, ThingInfo, ThingAttr, Topic, ActionDef, AccessType};
+use std::thread;
+use std::time::Duration;
+use safe_o_t::{SAFEoT, ThingAttr, Topic, ActionDef, AccessType};
 
-fn printRequestedNotif(thing_id: &str, topic: &str, data: &str) {
+fn print_requested_notif(thing_id: &str, topic: &str, data: &str) {
     println!("Notification received from thing_id: {}, topic: {}, data: {}", thing_id, topic, data)
 }
 
@@ -35,26 +37,48 @@ pub fn main() {
         ActionDef::new("deiverCopy", AccessType::Thing, vec![])
     ];
 
-    let mut safeot: SAFEoT = SAFEoT::new(id).unwrap();
-    match safeot.get_thing_info(id) {
-        Ok(i) => println!("\nWe got info: {} - Status: {}", i, safeot.status),
+    let mut safeot: SAFEoT;
+    match SAFEoT::new(id, print_requested_notif) {
+        Ok(s) => safeot = s,
+        Err(e) => panic!("{}", e)
+    }
+
+    let _ = safeot.register_thing(attributes, topics, actions);
+
+    match safeot.get_thing_status(id) {
+        Ok(status) => println!("\nWe got status: {:?}", status),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
-    safeot.register_thing(attributes, topics, actions);
-    match safeot.get_thing_info(id) {
-        Ok(i) => println!("\nWe got info: {} - Status: {}", i, safeot.status),
+    match safeot.get_thing_addr_name(id) {
+        Ok(addr_name) => println!("\nWe got address name: {:?}", addr_name),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
-    safeot.publish_thing(id);
-    match safeot.get_thing_info(id) {
-        Ok(i) => println!("\nWe got info: {} - Status: {}", i, safeot.status),
+    match safeot.get_thing_attrs(id) {
+        Ok(attrs) => println!("\nWe got attrs: {:?}", attrs),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
-    safeot.subscribe(id, "printRequested", printRequestedNotif);
+    match safeot.get_thing_topics(id) {
+        Ok(topics) => println!("\nWe got topics: {:?}", topics),
+        Err(e) => println!("We got a problem!: {}", e)
+    }
 
-    safeot.notify("printRequested", "print job started");
+    match safeot.get_thing_actions(id) {
+        Ok(actions) => println!("\nWe got actions: {:?}", actions),
+        Err(e) => println!("We got a problem!: {}", e)
+    }
 
+    let _ = safeot.publish_thing(id);
+    match safeot.get_thing_status(id) {
+        Ok(status) => println!("\nWe got status: {:?}", status),
+        Err(e) => println!("We got a problem!: {}", e)
+    }
+
+    let _ = safeot.subscribe(id, "printRequested");
+    thread::sleep(Duration::from_secs(5));
+
+    let _ = safeot.notify("printRequested", "print job started");
+    thread::sleep(Duration::from_secs(20));
 }

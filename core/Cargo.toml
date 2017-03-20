@@ -2,6 +2,9 @@
 name = "safe_o_t"
 version = "0.1.0"
 authors = ["Gabriel Viganotti <gabrielviganotti@gmail.com>"]
+license = "GPL-3.0"
 
 [dependencies]
-rust_sodium = "~0.1.2"
+serde = "0.9"
+serde_derive = "0.9"
+serde_json = "0.9"

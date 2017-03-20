@@ -1,16 +1,25 @@
-//use rust_sodium::crypto::hash::sha256;
-use std::fmt;
-use std::{time, thread};
+#[macro_use]
+extern crate serde_derive;
+
+extern crate serde_json;
 
 mod comm;
+mod errors;
+
+use std::collections::BTreeMap;
+use std::thread;
+use std::time::Duration;
 use comm::{SAFEoTComm, ActionArgs};
+use errors::{ResultReturn, Error, ErrorCode};
+
+use std::fmt;
 
 /// Which set of Things are allow to register to a topic
 /// Thing: access only to the thing's application.
 /// Owner: access also is allowed to an individual, application or system that is the actual owner of the Thing, plus the Thing itself.
 /// Group: access to a group of individuals or Things, plus the Owner and the Thing itself.
 /// All: access is allowed to anyone or anything, including Owner and the Thing itself.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AccessType {
     Thing,
     Owner,
@@ -39,7 +48,7 @@ impl fmt::Display for Status {
 }
 
 /// Topic name and access type
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Topic {
     pub name: String,
     pub access: AccessType
@@ -52,7 +61,7 @@ impl Topic {
 }
 
 /// This is the structure which defines the attributes of a SAFE Thing
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ThingAttr {
     pub attr: String,
     pub value: String
@@ -65,7 +74,7 @@ impl ThingAttr {
 }
 
 /// Actions that can be requested to a Thing
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActionDef {
     pub name: String,
     pub access: AccessType,
@@ -82,130 +91,168 @@ impl ActionDef {
     }
 }
 
-/// Information of a Thing describing all published attributes, topics and actions
-#[derive(Clone, Debug)]
-pub struct ThingInfo {
-    pub id: String,
-    pub addr_name: String,
-    pub attrs: Vec<ThingAttr>,
-    pub topics: Vec<Topic>,
-    pub actions: Vec<ActionDef>
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize)]
+enum FilterOperator {
+    Equal,
+    NotEqual,
+    LessThan,
+    GreaterThan
 }
 
-impl fmt::Display for ThingInfo {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "(id: {}, addr_name: {})", self.id, self.addr_name)
-    }
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize)]
+struct EventFilter {
+    arg_name: String,
+    arg_op: FilterOperator,
+    arg_value: String
 }
 
-// This will be removed when we have the mock or the integration with the safe_app library
-struct MutableData {
-    name: String,
-    type_tag: u64
-}
-
-impl MutableData {
-    pub fn new(id: &String, type_tag: u64) -> MutableData {
-        //let Digest(digest) = sha256::hash(id.as_bytes());
-        let mut id = String::from(id.as_str());
-        id.push_str("0101010");
-        MutableData {name: id, type_tag: type_tag}
-    }
-}
-
+/// A subscription is a map from Topic to a list of filters
+type Subscription = BTreeMap<String, Vec<EventFilter>>;
 
 pub struct SAFEoT {
     pub thing_id: String,
-    pub status: Status,
-    storage: Option<ThingInfo>,
     safeot_comm: SAFEoTComm,
+    subscriptions: BTreeMap<String, Subscription>,
     notifs_cb: fn(&str, &str, &str)
 }
 
-fn cb_default(_: &str, _: &str, _: &str) {
-    println!("No callback defined");
-}
-
 impl SAFEoT {
-    pub fn new(thing_id: &str) -> Result<SAFEoT, String> {
+    pub fn new(thing_id: &str, notifs_cb: fn(&str, &str, &str)) -> ResultReturn<SAFEoT> {
         println!("SAFEoT instance created with Thing ID: {}", thing_id);
+
+        let thread = thread::spawn(move || {
+            loop {
+                println!("Checking events...");
+//                for (thing_id, subs) in self.subscriptions.iter() {
+//                    for (topic, filter) in subs.iter() {
+                        //self.safeot_comm.get_topic_events(topic).map(|events| {
+                            //println!("Event occurred for topic: {}, data: {}", topic, events);
+                            //notifs_cb(thing.as_str(), topic.as_str(), events.as_str());
+                            notifs_cb("thing", "printRequested", "events");
+                        //});
+//                    }
+//                }
+                thread::sleep(Duration::from_secs(2));
+            }
+        });
+
         let safeot = SAFEoT {
             thing_id: String::from(thing_id),
-            status: Status::Unregistered,
-            storage: None,
-            safeot_comm: SAFEoTComm::new(thing_id),
-            notifs_cb: cb_default
+            safeot_comm: SAFEoTComm::new(thing_id)?,
+            subscriptions: BTreeMap::new(),
+            notifs_cb: notifs_cb
         };
-
-        thread::spawn(|| {
-            thread::sleep(time::Duration::from_millis(10000));
-            println!("this is thread number {}", 1);
-            //(safeot.notifs_cb)(safeot.thing_id.as_str(), "topic", "data");
-        });
 
         Ok(safeot)
     }
 
     /// Register and re-register a SAFE Thing specifying its attributes,
     /// events/topics and available actions
-    pub fn register_thing(&mut self, attrs: Vec<ThingAttr>, topics: Vec<Topic>, actions: Vec<ActionDef>) -> Option<String> {
+    pub fn register_thing(&mut self, attrs: Vec<ThingAttr>,
+                            topics: Vec<Topic>, actions: Vec<ActionDef>) -> ResultReturn<()> {
         // Register it in the network
-        let md = MutableData::new(&self.thing_id, 15000);
+        self.safeot_comm.store_thing_entity(15000);
 
-        let info: ThingInfo = ThingInfo {
-            id: String::from(self.thing_id.as_str()),
-            addr_name: md.name,
-            attrs: attrs,
-            topics: topics,
-            actions: actions
-        };
+        // Populate entity with attributes
+        let attrs: String = serde_json::to_string(&attrs).unwrap();
+        self.safeot_comm.set_attributes(attrs.as_str());
 
-        println!("Thing registered wih id {:?}", info.id);
-        self.storage = Some(info);
-        self.status = Status::Registered;
-        None
+        // Populate entity with topics
+        let topics: String = serde_json::to_string(&topics).unwrap();
+        self.safeot_comm.set_topics(topics.as_str());
+
+        // Populate entity with actions
+        let actions: String = serde_json::to_string(&actions).unwrap();
+        self.safeot_comm.set_actions(actions.as_str());
+
+        self.safeot_comm.set_status("Registered");
+
+        println!("Thing registered wih id: {}", self.thing_id);
+        Ok(())
+    }
+
+    /// Get status of a Thing
+    pub fn get_thing_status(&self, thing_id: &str) -> ResultReturn<String> {
+        // Search on the network by thing_id
+        let status = self.safeot_comm.get_thing_status(thing_id)?;
+        Ok(status)
+    }
+
+    /// Get address name of a Thing
+    pub fn get_thing_addr_name(&self, thing_id: &str) -> ResultReturn<String> {
+        // Search on the network by thing_id
+        let addr_name = self.safeot_comm.get_thing_addr_name(thing_id)?;
+        Ok(addr_name)
+    }
+
+    /// Get list of attrbiutes of a Thing
+    pub fn get_thing_attrs(&self, thing_id: &str) -> ResultReturn<Vec<ThingAttr>> {
+        // Search on the network by thing_id
+        let attrs_str = self.safeot_comm.get_thing_attrs(thing_id)?;
+        let attrs: Vec<ThingAttr> = serde_json::from_str(&attrs_str).unwrap();
+        Ok(attrs)
+    }
+
+    /// Get list of topics supported by a Thing
+    pub fn get_thing_topics(&self, thing_id: &str) -> ResultReturn<Vec<Topic>> {
+        // Search on the network by thing_id
+        let topics_str = self.safeot_comm.get_thing_topics(thing_id)?;
+        let topics: Vec<Topic> = serde_json::from_str(&topics_str).unwrap();
+        Ok(topics)
+    }
+
+    /// Get list of actions supported by a Thing
+    pub fn get_thing_actions(&self, thing_id: &str) -> ResultReturn<Vec<ActionDef>> {
+        // Search on the network by thing_id
+        let actions_str = self.safeot_comm.get_thing_actions(thing_id)?;
+        let actions: Vec<ActionDef> = serde_json::from_str(&actions_str).unwrap();
+        Ok(actions)
     }
 
     /// Publish the thing making it available and operative in the network, allowing other Things
-    /// to request actions, subscribe to topics, and receive notifications for events.
-    pub fn publish_thing(&mut self, thing_id: &str) -> Option<String> {
+    /// to request actions, subscribe to topics, and receive notifications upon events.
+    pub fn publish_thing(&mut self, thing_id: &str) -> ResultReturn<()> {
         // Publish it in the network
         println!("Thing published wih id {:?}", thing_id);
-        self.status = Status::Published;
-        None
-    }
-
-    /// Get information about a Thing in order to then subscribe to topics supported
-    pub fn get_thing_info(&self, thing_id: &str) -> Result<ThingInfo, String> {
-        // Search on the network by thing_id
-        self.storage.clone().ok_or("The thing doesn't contain information".to_owned())
-    }
-
-    /// Send an action request to a Thing and wait for response
-    pub fn action_request(&self, thing_id: &str, action: &str, args: ActionArgs) -> Result<String, String> {
-        // Search on the network by thing_id
-        self.safeot_comm.sendActionRequest(thing_id, action, args).ok_or("Action request failure".to_owned())
+        self.safeot_comm.set_status("Published");
+        Ok(())
     }
 
     /// Subscribe to topics published by a Thing (all data is stored in the network to support device resets/reboots)
     /// Eventually this can support filters
-    pub fn subscribe(&mut self, thing_id: &str, topic: &str, cb: fn(&str, &str, &str)) -> Option<String>
+    pub fn subscribe(&mut self, thing_id: &str, topic: &str/*, filter*/) -> ResultReturn<()>
     {
-        self.safeot_comm.addSubscription(thing_id, topic);
-        self.notifs_cb = cb;
-        None
+        self.subscriptions.entry(String::from(thing_id)).or_insert(BTreeMap::new());
+
+        let thing = String::from(thing_id);
+        self.subscriptions.get_mut(&thing).map(|subs| {
+            let filters: Vec<EventFilter> = vec![];
+            subs.insert(String::from(topic), filters);
+        });
+
+        // Store subscription on the network
+        let subscriptions_str: String = serde_json::to_string(&self.subscriptions).unwrap();
+        self.safeot_comm.set_subscriptions(subscriptions_str.as_str())?;
+
+        Ok(())
     }
 
-    /// Notify of an event associated to an spefici topic.
+    /// Notify of an event associated to an speficic topic.
     /// Eventually this can support multiple topics.
-    pub fn notify(&mut self, topic: &str, data: &str) -> Option<String>
+    pub fn notify(&mut self, topic: &str, data: &str) -> ResultReturn<()>
     {
-        self.safeot_comm.publishEvent(topic, data);
-        println!("Event occurred, send notification for topic: {}, thing_id: {}", topic, self.thing_id);
+        println!("Event occurred for topic: {}, data: {}", topic, data);
+        self.safeot_comm.set_topic_events(topic, data)?;
+        Ok(())
+    }
 
-        (self.notifs_cb)(self.thing_id.as_str(), "topic", "data");
-
-        None
+    /// Send an action request to a Thing and wait for response
+    pub fn action_request(&self, thing_id: &str, action: &str, args: ActionArgs) -> ResultReturn<&str> {
+        // Search on the network by thing_id
+        //self.safeot_comm.send_action_request(thing_id, action, args).ok_or("Action request failure".to_owned())
+        Ok("")
     }
 }
 
