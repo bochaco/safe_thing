@@ -1,17 +1,16 @@
 #[macro_use]
 extern crate serde_derive;
 
-extern crate serde_json;
-
 mod comm;
 mod errors;
+
+extern crate serde_json;
 
 use std::collections::BTreeMap;
 use std::thread;
 use std::time::Duration;
 use comm::{SAFEoTComm, ActionArgs};
 use errors::{ResultReturn, Error, ErrorCode};
-
 use std::fmt;
 
 /// Which set of Things are allow to register to a topic
@@ -119,9 +118,9 @@ pub struct SAFEoT {
 }
 
 impl SAFEoT {
-    pub fn new(thing_id: &str, notifs_cb: fn(&str, &str, &str)) -> ResultReturn<SAFEoT> {
+    pub fn new(thing_id: &str, auth_token: &str, notifs_cb: fn(&str, &str, &str)) -> ResultReturn<SAFEoT> {
         println!("SAFEoT instance created with Thing ID: {}", thing_id);
-
+/*
         let thread = thread::spawn(move || {
             loop {
                 println!("Checking events...");
@@ -137,10 +136,10 @@ impl SAFEoT {
                 thread::sleep(Duration::from_secs(2));
             }
         });
-
+*/
         let safeot = SAFEoT {
             thing_id: String::from(thing_id),
-            safeot_comm: SAFEoTComm::new(thing_id)?,
+            safeot_comm: SAFEoTComm::new(thing_id, auth_token)?,
             subscriptions: BTreeMap::new(),
             notifs_cb: notifs_cb
         };

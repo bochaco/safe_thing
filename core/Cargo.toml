@@ -4,7 +4,14 @@ version = "0.1.0"
 authors = ["Gabriel Viganotti <gabrielviganotti@gmail.com>"]
 license = "GPL-3.0"
 
+[features]
+use-mock-routing = ["safe_app/use-mock-routing"]
+
 [dependencies]
+safe_app = { git = "https://github.com/maidsafe/safe_client_libs.git", path = "safe_app", branch = "dev" }
+safe_core = { git = "https://github.com/maidsafe/safe_client_libs.git", path = "safe_core", branch = "dev" }
 serde = "0.9"
 serde_derive = "0.9"
 serde_json = "0.9"
+rust_sodium = "~0.1.2"
+rustc-serialize = "0.3"

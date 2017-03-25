@@ -8,7 +8,7 @@
     "url": "git+https://.git"
   },
   "scripts": {
-    "build-lib": "cd ../../ffi && cargo build && cd ../ && cp -f ./ffi/target/debug/*safe_o_t* ./bindings/nodejs/",
+    "build-lib": "cd ../../ffi && cargo build --features \"use-mock-routing\" && cd ../ && cp -f ./ffi/target/debug/*safe_o_t* ./bindings/nodejs/",
     "test": "mocha"
   },
   "keywords": [
