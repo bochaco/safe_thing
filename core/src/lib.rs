@@ -121,7 +121,7 @@ pub struct SAFEthing {
 
 impl SAFEthing {
     #[allow(unused_variables)]
-    pub fn new(thing_id: &str, auth_token: &str, notifs_cb: fn(&str, &str, &str)) -> ResultReturn<SAFEthing> {
+    pub fn new(thing_id: &str, auth_uri: &str, notifs_cb: fn(&str, &str, &str)) -> ResultReturn<SAFEthing> {
         println!("SAFEthing instance created with Thing ID: {}", thing_id);
 /*
         let thread = thread::spawn(move || {
@@ -147,7 +147,7 @@ impl SAFEthing {
 
         let safe_thing = SAFEthing {
             thing_id: thing_id.to_string(),
-            safe_thing_comm: SAFEthingComm::new(thing_id, auth_token)?,
+            safe_thing_comm: SAFEthingComm::new(thing_id, auth_uri)?,
             subscriptions: BTreeMap::new(),
             //notifs_cb: notifs_cb
         };

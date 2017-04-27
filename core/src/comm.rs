@@ -218,7 +218,7 @@ impl SAFEthingComm {
             .wait();
     }
 
-    pub fn new(thing_id: &str, auth_token: &str) -> ResultReturn<SAFEthingComm> {
+    pub fn new(thing_id: &str, auth_uri: &str) -> ResultReturn<SAFEthingComm> {
         let mut safe_thing_comm = SAFEthingComm {
             thing_id: String::from(thing_id),
             conn_status: ConnStatus::INIT,
@@ -242,7 +242,7 @@ impl SAFEthingComm {
 
         let safe_thing_comm_c_void_ptr = &mut safe_thing_comm as *mut _ as *mut c_void;
         let mut uri: CString = Default::default();
-        match CString::new(auth_token) {
+        match CString::new(auth_uri) {
             Ok(v) => uri = v,
             Err(e) => return Err(Error::new(ErrorCode::InvalidParameters,
                                                 format!("Auth token is invalid: {}", e).as_str()))
