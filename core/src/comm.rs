@@ -35,7 +35,7 @@ use self::futures::Future;
 //use self::futures_cpupool::CpuPool;
 use self::tokio_timer::Timer;
 
-static SAFE_o_T_ENTRY_APP_STATUS: &'static str = "_safeot_app_status";
+static SAFEthing_ENTRY_APP_STATUS: &'static str = "_safe_thing_app_status";
 
 
 pub type ActionArgs = Vec<String>; // the values are opaque for the framework
@@ -48,7 +48,7 @@ enum ConnStatus {
 }
 
 #[derive(Debug)]
-pub struct SAFEoTComm {
+pub struct SAFEthingComm {
     thing_id: String,
     conn_status: ConnStatus,
     safe_app: *mut App,
@@ -69,7 +69,7 @@ pub struct SAFEoTComm {
 }
 
 // BEGIN: MutableData retrieve values callbacks
-extern "C" fn mdata_get_value_callabck(safeot_c_void: *mut c_void, err: i32, value_ptr: *const u8, value_len: usize, version: u64) {
+extern "C" fn mdata_get_value_callabck(safe_thing_c_void: *mut c_void, err: i32, value_ptr: *const u8, value_len: usize, version: u64) {
     unsafe {
         let value = slice::from_raw_parts(value_ptr, value_len).to_vec();
         let v = String::from_utf8(value).unwrap();
@@ -78,105 +78,105 @@ extern "C" fn mdata_get_value_callabck(safeot_c_void: *mut c_void, err: i32, val
 }
 
 // BEGIN: MutableData Mutations callbacks
-extern "C" fn mdata_mutate_entries_callback(safeot_c_void: *mut c_void, err: i32) {
+extern "C" fn mdata_mutate_entries_callback(safe_thing_c_void: *mut c_void, err: i32) {
     println!("MutableData entry actions mutated {}", err);
     if err == -107 {
         println!("MutableData entry already exits");
     }
 }
 
-extern "C" fn mdata_entry_actions_insert_callback(safeot_c_void: *mut c_void, err: i32) {
+extern "C" fn mdata_entry_actions_insert_callback(safe_thing_c_void: *mut c_void, err: i32) {
     println!("MutableData entry actions insert {}", err);
     unsafe {
-        let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
-        mdata_mutate_entries(safeot.safe_app, safeot.mutable_data_h, safeot.entry_actions_h, safeot_c_void, mdata_mutate_entries_callback);
+        let safe_thing: &mut SAFEthingComm = &mut *(safe_thing_c_void as *mut SAFEthingComm);
+        mdata_mutate_entries(safe_thing.safe_app, safe_thing.mutable_data_h, safe_thing.entry_actions_h, safe_thing_c_void, mdata_mutate_entries_callback);
     };
 }
 
-extern "C" fn mdata_entry_actions_callback(safeot_c_void: *mut c_void, err: i32, entry_actions_h: MDataEntryActionsHandle) {
+extern "C" fn mdata_entry_actions_callback(safe_thing_c_void: *mut c_void, err: i32, entry_actions_h: MDataEntryActionsHandle) {
     println!("MutableData entry actions {} {}", err, entry_actions_h);
     unsafe {
-        let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
-        safeot.entry_actions_h = entry_actions_h;
-        let key = SAFE_o_T_ENTRY_APP_STATUS;
-        let value = safeot.status.clone();
-        mdata_entry_actions_insert(safeot.safe_app, safeot.entry_actions_h,
+        let safe_thing: &mut SAFEthingComm = &mut *(safe_thing_c_void as *mut SAFEthingComm);
+        safe_thing.entry_actions_h = entry_actions_h;
+        let key = SAFEthing_ENTRY_APP_STATUS;
+        let value = safe_thing.status.clone();
+        mdata_entry_actions_insert(safe_thing.safe_app, safe_thing.entry_actions_h,
             key.as_ptr(), key.len(),
             value.as_ptr(), value.len(),
-            safeot_c_void, mdata_entry_actions_insert_callback);
+            safe_thing_c_void, mdata_entry_actions_insert_callback);
     };
 }
 // END: MutableData Mutations callbacks
 
 
 // BEGIN: MutableData creation/retrieval callbacks
-extern "C" fn mdata_put_callback(safeot_c_void: *mut c_void, err: i32) {
+extern "C" fn mdata_put_callback(safe_thing_c_void: *mut c_void, err: i32) {
     println!("MutableData put in network {}", err);
     if err == -104 {
         println!("MutableData already exits");
     }
 }
 
-extern "C" fn perms_insert_callback(safeot_c_void: *mut c_void, err: i32) {
+extern "C" fn perms_insert_callback(safe_thing_c_void: *mut c_void, err: i32) {
     println!("PermissionSet inserted in Permissions {}", err);
     unsafe {
-        let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
-        mdata_put(safeot.safe_app, safeot.mutable_data_h, safeot.perms_h, 0, safeot_c_void, mdata_put_callback);
+        let safe_thing: &mut SAFEthingComm = &mut *(safe_thing_c_void as *mut SAFEthingComm);
+        mdata_put(safe_thing.safe_app, safe_thing.mutable_data_h, safe_thing.perms_h, 0, safe_thing_c_void, mdata_put_callback);
         // FIXME: provide en empty but valid Entries object handle
     };
 }
 
-extern "C" fn new_perms_callback(safeot_c_void: *mut c_void, err: i32, perms_h: MDataPermissionsHandle) {
+extern "C" fn new_perms_callback(safe_thing_c_void: *mut c_void, err: i32, perms_h: MDataPermissionsHandle) {
     println!("Permissions created {} {}", err, perms_h);
     unsafe {
-        let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
-        safeot.perms_h = perms_h;
-        mdata_permissions_insert(safeot.safe_app, safeot.perms_h, safeot.sign_key_h, safeot.perm_set_h, safeot_c_void, perms_insert_callback);
+        let safe_thing: &mut SAFEthingComm = &mut *(safe_thing_c_void as *mut SAFEthingComm);
+        safe_thing.perms_h = perms_h;
+        mdata_permissions_insert(safe_thing.safe_app, safe_thing.perms_h, safe_thing.sign_key_h, safe_thing.perm_set_h, safe_thing_c_void, perms_insert_callback);
     };
 }
 
-extern "C" fn perms_allow_update_callback(safeot_c_void: *mut c_void, err: i32) {
+extern "C" fn perms_allow_update_callback(safe_thing_c_void: *mut c_void, err: i32) {
     println!("PermissionSet set with action update done {}", err);
     unsafe {
-        let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
-        mdata_permissions_new(safeot.safe_app, safeot_c_void, new_perms_callback)
+        let safe_thing: &mut SAFEthingComm = &mut *(safe_thing_c_void as *mut SAFEthingComm);
+        mdata_permissions_new(safe_thing.safe_app, safe_thing_c_void, new_perms_callback)
     };
 }
-extern "C" fn perms_allow_intert_callback(safeot_c_void: *mut c_void, err: i32) {
+extern "C" fn perms_allow_intert_callback(safe_thing_c_void: *mut c_void, err: i32) {
     println!("PermissionSet set with action insert done {}", err);
     unsafe {
-        let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
+        let safe_thing: &mut SAFEthingComm = &mut *(safe_thing_c_void as *mut SAFEthingComm);
         let action = MDataAction::Update;
-        mdata_permissions_set_allow(safeot.safe_app, safeot.perm_set_h, action, safeot_c_void, perms_allow_update_callback)
+        mdata_permissions_set_allow(safe_thing.safe_app, safe_thing.perm_set_h, action, safe_thing_c_void, perms_allow_update_callback)
     };
 }
 
-extern "C" fn new_perm_set_callback(safeot_c_void: *mut c_void, err: i32, perm_set_h: MDataPermissionSetHandle) {
+extern "C" fn new_perm_set_callback(safe_thing_c_void: *mut c_void, err: i32, perm_set_h: MDataPermissionSetHandle) {
     println!("PermissionSet created {} {}", err, perm_set_h);
     unsafe {
-        let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
-        safeot.perm_set_h = perm_set_h;
+        let safe_thing: &mut SAFEthingComm = &mut *(safe_thing_c_void as *mut SAFEthingComm);
+        safe_thing.perm_set_h = perm_set_h;
         let action = MDataAction::Insert;
-        mdata_permissions_set_allow(safeot.safe_app, safeot.perm_set_h, action, safeot_c_void, perms_allow_intert_callback)
+        mdata_permissions_set_allow(safe_thing.safe_app, safe_thing.perm_set_h, action, safe_thing_c_void, perms_allow_intert_callback)
     };
 }
 
-extern "C" fn new_md_callback(safeot_c_void: *mut c_void, err: i32, md_h: MDataInfoHandle) {
+extern "C" fn new_md_callback(safe_thing_c_void: *mut c_void, err: i32, md_h: MDataInfoHandle) {
     println!("MutableData created {} {}", err, md_h);
     unsafe {
-        let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
-        safeot.mutable_data_h = md_h;
-        mdata_permission_set_new(safeot.safe_app, safeot_c_void, new_perm_set_callback);
+        let safe_thing: &mut SAFEthingComm = &mut *(safe_thing_c_void as *mut SAFEthingComm);
+        safe_thing.mutable_data_h = md_h;
+        mdata_permission_set_new(safe_thing.safe_app, safe_thing_c_void, new_perm_set_callback);
     };
 }
 // END: MutableData callbacks
 
 // BEGIN: Auth callbacks
-extern "C" fn app_sign_key_callback(safeot_c_void: *mut c_void, err: i32, sign_key_h: SignKeyHandle) {
+extern "C" fn app_sign_key_callback(safe_thing_c_void: *mut c_void, err: i32, sign_key_h: SignKeyHandle) {
     println!("App's pub sign key retrieved {} {}", err, sign_key_h);
     unsafe {
-        let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
-        safeot.sign_key_h = sign_key_h;
+        let safe_thing: &mut SAFEthingComm = &mut *(safe_thing_c_void as *mut SAFEthingComm);
+        safe_thing.sign_key_h = sign_key_h;
     };
 }
 
@@ -184,15 +184,15 @@ extern "C" fn callback(user_data: *mut c_void, err: i32, state: i32) {
     println!("App registered {} {}", err, state);
 }
 
-extern "C" fn auth_cb(safeot_c_void: *mut c_void, err: u32, auth_granted: *const AuthGranted) {
+extern "C" fn auth_cb(safe_thing_c_void: *mut c_void, err: u32, auth_granted: *const AuthGranted) {
    println!("App was authorised {}", err);
-   let app_id = CString::new("net.safeot.framework.id").unwrap();
+   let app_id = CString::new("net.safe_thing.framework.id").unwrap();
    unsafe {
-       let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
-       let r = app_registered(app_id.as_ptr(), auth_granted, safeot_c_void, callback, &mut safeot.safe_app);
+       let safe_thing: &mut SAFEthingComm = &mut *(safe_thing_c_void as *mut SAFEthingComm);
+       let r = app_registered(app_id.as_ptr(), auth_granted, safe_thing_c_void, callback, &mut safe_thing.safe_app);
        println!("Registering app {}", r);
-       safeot.conn_status = ConnStatus::REGISTERED;
-       app_pub_sign_key(safeot.safe_app, safeot_c_void, app_sign_key_callback);
+       safe_thing.conn_status = ConnStatus::REGISTERED;
+       app_pub_sign_key(safe_thing.safe_app, safe_thing_c_void, app_sign_key_callback);
    };
 }
 
@@ -210,7 +210,7 @@ extern "C" fn error_cb(user_data: *mut c_void, err: i32, b: u32) {
 // END: Auth callbacks
 
 #[allow(unused_variables)]
-impl SAFEoTComm {
+impl SAFEthingComm {
     // FIXME: this is temporary until futures are implemented
     fn sleep(m: u64) {
         let timer = Timer::default();
@@ -218,8 +218,8 @@ impl SAFEoTComm {
             .wait();
     }
 
-    pub fn new(thing_id: &str, auth_token: &str) -> ResultReturn<SAFEoTComm> {
-        let mut safeot_comm = SAFEoTComm {
+    pub fn new(thing_id: &str, auth_token: &str) -> ResultReturn<SAFEthingComm> {
+        let mut safe_thing_comm = SAFEthingComm {
             thing_id: String::from(thing_id),
             conn_status: ConnStatus::INIT,
             safe_app: null_mut(),
@@ -229,7 +229,7 @@ impl SAFEoTComm {
             perms_h: Default::default(),
             entry_actions_h: Default::default(),
             xor_name: Default::default(),
-            // These are attributes of the Thing itself which are just cached here
+            // These are attributes of the SAFEthing itself which are just cached here
             status: String::from("Unknown"),
 
             // the following are temporary
@@ -240,7 +240,7 @@ impl SAFEoTComm {
             topic_events: BTreeMap::new(),
         };
 
-        let safeot_comm_c_void_ptr = &mut safeot_comm as *mut _ as *mut c_void;
+        let safe_thing_comm_c_void_ptr = &mut safe_thing_comm as *mut _ as *mut c_void;
         let mut uri: CString = Default::default();
         match CString::new(auth_token) {
             Ok(v) => uri = v,
@@ -250,12 +250,12 @@ impl SAFEoTComm {
 
         unsafe {
             // Connect to the SAFE network using the auth URI
-            decode_ipc_msg(uri.as_ptr(), safeot_comm_c_void_ptr, auth_cb, containers_cb, revoked_cb, error_cb);
+            decode_ipc_msg(uri.as_ptr(), safe_thing_comm_c_void_ptr, auth_cb, containers_cb, revoked_cb, error_cb);
         };
 
-        SAFEoTComm::sleep(1000);
+        SAFEthingComm::sleep(1000);
 
-        Ok(safeot_comm)
+        Ok(safe_thing_comm)
     }
 
     // TODO: remove this as it's just for debugging
@@ -273,11 +273,11 @@ impl SAFEoTComm {
         let mut xor_name: [u8; 32] = Default::default();
         xor_name.copy_from_slice(sha256.as_ref());
         unsafe {
-            let mut safeot_comm_c_void_ptr = self as *mut _ as *mut c_void;
-            mdata_info_new_public(self.safe_app, &xor_name, type_tag, safeot_comm_c_void_ptr, new_md_callback);
+            let mut safe_thing_comm_c_void_ptr = self as *mut _ as *mut c_void;
+            mdata_info_new_public(self.safe_app, &xor_name, type_tag, safe_thing_comm_c_void_ptr, new_md_callback);
         };
 
-        SAFEoTComm::sleep(1000);
+        SAFEthingComm::sleep(1000);
 
         self.xor_name = sha256.as_ref().to_base64(config());
         Ok(self.xor_name.clone())
@@ -291,8 +291,8 @@ impl SAFEoTComm {
     pub fn set_status(&mut self, status: &str) -> ResultReturn<()> {
         self.status = String::from(status);
         unsafe {
-            let safeot_comm_c_void_ptr = self as *mut _ as *mut c_void;
-            mdata_entry_actions_new(self.safe_app, safeot_comm_c_void_ptr, mdata_entry_actions_callback);
+            let safe_thing_comm_c_void_ptr = self as *mut _ as *mut c_void;
+            mdata_entry_actions_new(self.safe_app, safe_thing_comm_c_void_ptr, mdata_entry_actions_callback);
         };
         Ok(())
     }
@@ -300,9 +300,9 @@ impl SAFEoTComm {
     // TODO: read from the network
     pub fn get_thing_status(&self, thing_id: &str) -> ResultReturn<String> {
         unsafe {
-            let safeot_comm_c_void_ptr = self as *const _ as *mut c_void;
-            let key = SAFE_o_T_ENTRY_APP_STATUS;
-            mdata_get_value(self.safe_app, self.mutable_data_h, key.as_ptr(), key.len(), safeot_comm_c_void_ptr, mdata_get_value_callabck);
+            let safe_thing_comm_c_void_ptr = self as *const _ as *mut c_void;
+            let key = SAFEthing_ENTRY_APP_STATUS;
+            mdata_get_value(self.safe_app, self.mutable_data_h, key.as_ptr(), key.len(), safe_thing_comm_c_void_ptr, mdata_get_value_callabck);
         };
         Ok(self.status.clone())
     }

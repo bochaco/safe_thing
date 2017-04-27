@@ -1,12 +1,12 @@
 [package]
-name = "safe_o_t_ffi"
+name = "safe_thing_ffi"
 version = "0.1.0"
 authors = ["Gabriel Viganotti <gabrielviganotti@gmail.com>"]
 license = "GPL-3.0"
 
 [dependencies]
-safe_o_t = { path = "../core", version = "~0.1.0" }
+safe_thing = { path = "../core", version = "~0.1.0" }
 
 [lib]
-name = "safe_o_t"
+name = "safe_thing"
 crate-type = ["staticlib", "cdylib"]

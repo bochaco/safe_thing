@@ -1,6 +1,6 @@
-extern crate safe_o_t;
+extern crate safe_thing;
 
-use safe_o_t::{SAFEoT, ThingAttr, Topic, ActionDef, AccessType};
+use safe_thing::{SAFEthing, ThingAttr, Topic, ActionDef, AccessType};
 
 fn print_requested_notif(thing_id: &str, topic: &str, data: &str) {
     println!("Notification received from thing_id: {}, topic: {}, data: {}", thing_id, topic, data)
@@ -37,49 +37,49 @@ pub fn main() {
         ActionDef::new("deiverCopy", AccessType::Thing, vec![])
     ];
 
-    let mut safeot: SAFEoT;
-    match SAFEoT::new(id, auth_token, print_requested_notif) {
-        Ok(s) => safeot = s,
+    let mut safe_thing: SAFEthing;
+    match SAFEthing::new(id, auth_token, print_requested_notif) {
+        Ok(s) => safe_thing = s,
         Err(e) => panic!("{}", e)
     }
 
-    let _ = safeot.register_thing(attributes, topics, actions);
+    let _ = safe_thing.register_thing(attributes, topics, actions);
 
-    match safeot.get_thing_status(id) {
+    match safe_thing.get_thing_status(id) {
         Ok(status) => println!("\nWe got status: {:?}", status),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
-    match safeot.get_thing_addr_name(id) {
+    match safe_thing.get_thing_addr_name(id) {
         Ok(addr_name) => println!("\nWe got address name: {:?}", addr_name),
         Err(e) => println!("We got a problem!: {}", e)
     }
 /*
-    match safeot.get_thing_attrs(id) {
+    match safe_thing.get_thing_attrs(id) {
         Ok(attrs) => println!("\nWe got attrs: {:?}", attrs),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
-    match safeot.get_thing_topics(id) {
+    match safe_thing.get_thing_topics(id) {
         Ok(topics) => println!("\nWe got topics: {:?}", topics),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
-    match safeot.get_thing_actions(id) {
+    match safe_thing.get_thing_actions(id) {
         Ok(actions) => println!("\nWe got actions: {:?}", actions),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
-    let _ = safeot.publish_thing(id);
-    match safeot.get_thing_status(id) {
+    let _ = safe_thing.publish_thing(id);
+    match safe_thing.get_thing_status(id) {
         Ok(status) => println!("\nWe got status: {:?}", status),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
-    let _ = safeot.subscribe(id, "printRequested");
+    let _ = safe_thing.subscribe(id, "printRequested");
     //thread::sleep(Duration::from_secs(5));
 
-    let _ = safeot.notify("printRequested", "print job started");
+    let _ = safe_thing.notify("printRequested", "print job started");
 */
 
 }

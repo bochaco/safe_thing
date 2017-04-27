@@ -1,5 +1,5 @@
 [package]
-name = "safe_o_t"
+name = "safe_thing"
 version = "0.1.0"
 authors = ["Gabriel Viganotti <gabrielviganotti@gmail.com>"]
 license = "GPL-3.0"

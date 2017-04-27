@@ -2,4 +2,5 @@ target
 Cargo.lock
 node_modules
 
-*safe_o_t*
+*.so
+*.a

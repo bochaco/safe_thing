@@ -8,7 +8,7 @@ extern crate serde_json;
 
 use std::collections::BTreeMap;
 //use std::thread;
-use comm::{SAFEoTComm, ActionArgs};
+use comm::{SAFEthingComm, ActionArgs};
 use errors::{ResultReturn, Error, ErrorCode};
 use std::fmt;
 
@@ -112,24 +112,24 @@ struct EventFilter {
 /// This is just a cache since it's all stored in the network.
 type Subscription = BTreeMap<String, Vec<EventFilter>>;
 
-pub struct SAFEoT {
+pub struct SAFEthing {
     pub thing_id: String,
-    safeot_comm: SAFEoTComm,
+    safe_thing_comm: SAFEthingComm,
     subscriptions: BTreeMap<String, Subscription>,
     //notifs_cb: fn(&str, &str, &str)
 }
 
-impl SAFEoT {
+impl SAFEthing {
     #[allow(unused_variables)]
-    pub fn new(thing_id: &str, auth_token: &str, notifs_cb: fn(&str, &str, &str)) -> ResultReturn<SAFEoT> {
-        println!("SAFEoT instance created with Thing ID: {}", thing_id);
+    pub fn new(thing_id: &str, auth_token: &str, notifs_cb: fn(&str, &str, &str)) -> ResultReturn<SAFEthing> {
+        println!("SAFEthing instance created with Thing ID: {}", thing_id);
 /*
         let thread = thread::spawn(move || {
             loop {
                 println!("Checking events...");
 //                for (thing_id, subs) in self.subscriptions.iter() {
 //                    for (topic, filter) in subs.iter() {
-                        //self.safeot_comm.get_topic_events(topic).map(|events| {
+                        //self.safe_thing_comm.get_topic_events(topic).map(|events| {
                             //println!("Event occurred for topic: {}, data: {}", topic, events);
                             //notifs_cb(thing.as_str(), topic.as_str(), events.as_str());
                             notifs_cb("thing", "printRequested", "events");
@@ -145,36 +145,36 @@ impl SAFEoT {
                 format!("Thing ID must be at least {} bytes long", THING_ID_MIN_LENGTH).as_str()));
         }
 
-        let safeot = SAFEoT {
+        let safe_thing = SAFEthing {
             thing_id: thing_id.to_string(),
-            safeot_comm: SAFEoTComm::new(thing_id, auth_token)?,
+            safe_thing_comm: SAFEthingComm::new(thing_id, auth_token)?,
             subscriptions: BTreeMap::new(),
             //notifs_cb: notifs_cb
         };
 
-        Ok(safeot)
+        Ok(safe_thing)
     }
 
-    /// Register and re-register a SAFE Thing specifying its attributes,
+    /// Register and re-register a SAFEthing specifying its attributes,
     /// events/topics and available actions
     pub fn register_thing(&mut self, attrs: Vec<ThingAttr>,
                             topics: Vec<Topic>, actions: Vec<ActionDef>) -> ResultReturn<()> {
         // Register it in the network
-        let _ = self.safeot_comm.store_thing_entity(15000);
+        let _ = self.safe_thing_comm.store_thing_entity(15000);
 
         // Populate entity with attributes
         let attrs: String = serde_json::to_string(&attrs).unwrap();
-        let _ = self.safeot_comm.set_attributes(attrs.as_str());
+        let _ = self.safe_thing_comm.set_attributes(attrs.as_str());
 
         // Populate entity with topics
         let topics: String = serde_json::to_string(&topics).unwrap();
-        let _ = self.safeot_comm.set_topics(topics.as_str());
+        let _ = self.safe_thing_comm.set_topics(topics.as_str());
 
         // Populate entity with actions
         let actions: String = serde_json::to_string(&actions).unwrap();
-        let _ = self.safeot_comm.set_actions(actions.as_str());
+        let _ = self.safe_thing_comm.set_actions(actions.as_str());
 
-        let _ = self.safeot_comm.set_status("Registered");
+        let _ = self.safe_thing_comm.set_status("Registered");
 
         println!("Thing registered wih id: {}", self.thing_id);
         Ok(())
@@ -183,21 +183,21 @@ impl SAFEoT {
     /// Get status of a Thing
     pub fn get_thing_status(&self, thing_id: &str) -> ResultReturn<String> {
         // Search on the network by thing_id
-        let status = self.safeot_comm.get_thing_status(thing_id)?;
+        let status = self.safe_thing_comm.get_thing_status(thing_id)?;
         Ok(status)
     }
 
     /// Get address name of a Thing
     pub fn get_thing_addr_name(&self, thing_id: &str) -> ResultReturn<String> {
         // Search on the network by thing_id
-        let addr_name = self.safeot_comm.get_thing_addr_name(thing_id)?;
+        let addr_name = self.safe_thing_comm.get_thing_addr_name(thing_id)?;
         Ok(addr_name)
     }
 
     /// Get list of attrbiutes of a Thing
     pub fn get_thing_attrs(&self, thing_id: &str) -> ResultReturn<Vec<ThingAttr>> {
         // Search on the network by thing_id
-        let attrs_str = self.safeot_comm.get_thing_attrs(thing_id)?;
+        let attrs_str = self.safe_thing_comm.get_thing_attrs(thing_id)?;
         let attrs: Vec<ThingAttr> = serde_json::from_str(&attrs_str).unwrap();
         Ok(attrs)
     }
@@ -205,7 +205,7 @@ impl SAFEoT {
     /// Get list of topics supported by a Thing
     pub fn get_thing_topics(&self, thing_id: &str) -> ResultReturn<Vec<Topic>> {
         // Search on the network by thing_id
-        let topics_str = self.safeot_comm.get_thing_topics(thing_id)?;
+        let topics_str = self.safe_thing_comm.get_thing_topics(thing_id)?;
         let topics: Vec<Topic> = serde_json::from_str(&topics_str).unwrap();
         Ok(topics)
     }
@@ -213,7 +213,7 @@ impl SAFEoT {
     /// Get list of actions supported by a Thing
     pub fn get_thing_actions(&self, thing_id: &str) -> ResultReturn<Vec<ActionDef>> {
         // Search on the network by thing_id
-        let actions_str = self.safeot_comm.get_thing_actions(thing_id)?;
+        let actions_str = self.safe_thing_comm.get_thing_actions(thing_id)?;
         let actions: Vec<ActionDef> = serde_json::from_str(&actions_str).unwrap();
         Ok(actions)
     }
@@ -223,11 +223,11 @@ impl SAFEoT {
     pub fn publish_thing(&mut self, thing_id: &str) -> ResultReturn<()> {
         // Publish it in the network
         println!("Thing published wih id {:?}", thing_id);
-        let _ = self.safeot_comm.set_status("Published");
+        let _ = self.safe_thing_comm.set_status("Published");
         Ok(())
     }
 
-    /// Subscribe to topics published by a Thing (all data is stored in the network to support device resets/reboots)
+    /// Subscribe to topics published by a SAFEthing (all data is stored in the network to support device resets/reboots)
     /// Eventually this can support filters
     pub fn subscribe(&mut self, thing_id: &str, topic: &str/*, filter*/) -> ResultReturn<()>
     {
@@ -241,7 +241,7 @@ impl SAFEoT {
 
         // Store subscription on the network
         let subscriptions_str: String = serde_json::to_string(&self.subscriptions).unwrap();
-        self.safeot_comm.set_subscriptions(subscriptions_str.as_str())?;
+        self.safe_thing_comm.set_subscriptions(subscriptions_str.as_str())?;
 
         Ok(())
     }
@@ -251,7 +251,7 @@ impl SAFEoT {
     pub fn notify(&mut self, topic: &str, data: &str) -> ResultReturn<()>
     {
         println!("Event occurred for topic: {}, data: {}", topic, data);
-        self.safeot_comm.set_topic_events(topic, data)?;
+        self.safe_thing_comm.set_topic_events(topic, data)?;
         Ok(())
     }
 
@@ -259,7 +259,7 @@ impl SAFEoT {
     #[allow(unused_variables)]
     pub fn action_request(&self, thing_id: &str, action: &str, args: ActionArgs) -> ResultReturn<&str> {
         // Search on the network by thing_id
-        //self.safeot_comm.send_action_request(thing_id, action, args).ok_or("Action request failure".to_owned())
+        //self.safe_thing_comm.send_action_request(thing_id, action, args).ok_or("Action request failure".to_owned())
         Ok("")
     }
 }

@@ -1,77 +1,77 @@
 @startuml
 title **Use Case: Subscribing to Topics and Receiving Notifications**
 
-participant "Thing A" as thingA
-participant "SAFEoT Framework\nwithin Thing A" as safeotA
-participant "Thing B" as thingB
-participant "SAFEoT Framework\nwithin Thing B" as safeotB
+participant "SAFEthing A" as thingA
+participant "SAFEthing Framework\nwithin SAFEthing A" as frameworkA
+participant "SAFEthing B" as thingB
+participant "SAFEthing Framework\nwithin SAFEthing B" as frameworkB
 participant "SAFE Network" as safenet
 
 activate thingA
-thingA -> safeotA: Init(thingA_id)
-activate safeotA
-thingA <-- safeotA: Ok
-thingA -> safeotA: GetThingInfo(thingB_id)
+thingA -> frameworkA: New(thingA_id)
+activate frameworkA
+thingA <-- frameworkA: Ok
+thingA -> frameworkA: GetThingInfo(thingB_id)
 
-safeotA -> safenet: FetchMD( XoRName(thingB_id) )
+frameworkA -> safenet: FetchMD( XoRName(thingB_id) )
 activate safenet
 
-safeotA <-- safenet: Ok(ThingB info)
+frameworkA <-- safenet: Ok(ThingB info)
 deactivate safenet
 
-thingA <-- safeotA: Done(ThingB info, topics,\nstatus = 'published')
-deactivate safeotA
+thingA <-- frameworkA: Ok(ThingB info, topics,\nstatus = 'published')
+deactivate frameworkA
 
-thingA -> safeotA: Subscribe(thingB_id, topic_name, call_back_function)
-activate safeotA
+thingA -> frameworkA: Subscribe(thingB_id, topic_name, call_back_function)
+activate frameworkA
 
-safeotA -> safenet: CreateMD/UpdateMD( XoRName(thingA_id),\ngetSubscriptionsEntry(thingB_id).add(topic_name) )
+frameworkA -> safenet: CreateMD/UpdateMD( XoRName(thingA_id),\ngetSubscriptionsEntry(thingB_id).add(topic_name) )
 activate safenet
 
-safeotA <-- safenet: Ok
+frameworkA <-- safenet: Ok
 deactivate safenet
 
-safeotA -> safeotA: Add (thingB_id, topic_name) to the cached\nlist of topics to monitor
+frameworkA -> frameworkA: Add (thingB_id, topic_name) to the cached\nlist of topics to monitor
 
-thingA <-- safeotA: Ok
-deactivate safeotA
+thingA <-- frameworkA: Ok
+deactivate frameworkA
 deactivate thingA
 
 ...later on...
 thingB -> thingB: Event(topic_name)
 activate thingB
 
-thingB -> safeotB: Notify(topic_name, topic_data)
-activate safeotB
+thingB -> frameworkB: Notify(topic_name, topic_data)
+activate frameworkB
 
-safeotB -> safenet: UpdateMD( XoRName(thingB_id),\ngetTopicEntry(topic_name).addNotification(topic_data) )
+frameworkB -> safenet: UpdateMD( XoRName(thingB_id),\ngetTopicEntry(topic_name).addNotification(topic_data) )
 activate safenet
 
-safeotB <-- safenet: Ok
+frameworkB <-- safenet: Ok
 deactivate safenet
 
-thingB <-- safeotB: Ok
-deactivate safeotB
+thingB <-- frameworkB: Ok
+deactivate frameworkB
 deactivate thingB
 
 ...
 
-safeotA -> safeotA: Monitor loop tick
-activate safeotA
+frameworkA -> frameworkA: Monitor loop tick
+activate frameworkA
 
-safeotA -> safeotA: Get cached list\nof topics to monitor
+frameworkA -> frameworkA: Get cached list\nof topics to monitor
 
-safeotA -> safenet: FetchMD( XoRName(thingB_id),\ngetTopicEntry(topic_name).fetchNotifications() )
+frameworkA -> safenet: FetchMD( XoRName(thingB_id),\ngetTopicEntry(topic_name).fetchNotifications() )
 activate safenet
 
-safeotA <-- safenet: Notifications([ (topic_name, topic_data) ] )
+frameworkA <-- safenet: Notifications([ (topic_name, topic_data) ] )
 deactivate safenet
 
-thingA <- safeotA: call_back_function(thingB_id, topic_name, topic_data)
+thingA <- frameworkA: call_back_function(thingB_id, topic_name, topic_data)
 activate thingA
 
-thingA --> safeotA: Ok
-deactivate safeotA
+thingA --> frameworkA: Ok
+deactivate frameworkA
 
 thingA -> thingA: Action based on notification
 deactivate thingA

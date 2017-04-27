@@ -1,20 +1,21 @@
 {
-  "name": "safe_o_t_nodejs",
+  "name": "safe_thing_nodejs",
   "version": "0.0.1",
-  "description": "NodeJs binding for the SAFEoT framework library",
+  "description": "NodeJs binding for the SAFEthing framework library",
   "main": "index.js",
   "repository": {
     "type": "git",
     "url": "git+https://.git"
   },
   "scripts": {
-    "build-lib": "cd ../../ffi && cargo build --features \"use-mock-routing\" && cd ../ && cp -f ./ffi/target/debug/*safe_o_t* ./bindings/nodejs/",
+    "build-lib": "cd ../../ffi && cargo build --features \"use-mock-routing\" && cd ../ && cp -f ./ffi/target/debug/*safe_thing* ./bindings/nodejs/",
     "test": "mocha"
   },
   "keywords": [
     "IoT",
     "SAFE",
     "SAFENet",
+    "SAFEthing",
     "descentralised",
     "communication"
   ],

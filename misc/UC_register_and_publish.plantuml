@@ -1,33 +1,33 @@
 @startuml
-title **Use Case: Publishing a Thing**
+title **Use Case: Publishing a SAFEthing**
 
-actor "Thing's Owner" as owner
-participant "Admin Console" as admin
-participant Thing as thing
-participant "SAFEoT Framework" as safeot
+actor "SAFEthing's\nOwner" as owner
+participant "Admin\nConsole" as admin
+participant SAFEthing as thing
+participant "SAFEthing Framework" as framework
 participant "SAFE Network" as safenet
 
 owner -> thing: Plug it
 activate thing
 
 thing -> thing: Display blinking green light\non thing's panel
-thing -> safeot: Init(thing_id)
-activate safeot
+thing -> framework: New(thing_id)
+activate framework
 
-thing <-- safeot: Ok
-deactivate safeot
+thing <-- framework: Ok
+deactivate framework
 
-thing -> safeot: Register(attributes, topics, ...)
-activate safeot
+thing -> framework: Register(attributes, topics, ...)
+activate framework
 
-safeot -> safenet: CreateMD( XoRName(thing_id), attributes,\nstatus = 'registered')
+framework -> safenet: CreateMD( XoRName(thing_id), attributes,\nstatus = 'registered')
 activate safenet
 
-safeot <-- safenet: Ok
+framework <-- safenet: Ok
 deactivate safenet
 
-thing <-- safeot: Ok(status = 'registered')
-deactivate safeot
+thing <-- framework: Ok(status = 'registered')
+deactivate framework
 thing -> thing: Display solid green light\non thing's panel
 deactivate thing
 
@@ -36,11 +36,17 @@ deactivate thing
 owner -> admin: Search(thing_id)
 activate admin
 
-admin -> safeot: GetThingInfo(thing_id)
-activate safeot
+admin -> framework: GetThingInfo(thing_id)
+activate framework
 
-admin <-- safeot: Done(Thing info, status = 'registered')
-deactivate safeot
+framework -> safenet: FetchMD( XoRName(thing_id))
+activate safenet
+
+framework <-- safenet: Ok(Thing info, status = 'registered')
+deactivate safenet
+
+admin <-- framework: Ok(Thing info, status = 'registered')
+deactivate framework
 
 owner <-- admin: Thing's info,\nStatus = 'registered'
 deactivate admin
@@ -48,17 +54,17 @@ deactivate admin
 owner -> admin: Publish(thing_id)
 activate admin
 
-admin -> safeot: Publish(thing_id)
-activate safeot
+admin -> framework: Publish(thing_id)
+activate framework
 
-safeot -> safenet: UpdateMD( XoRName(thing_id),\nstatus = 'published')
+framework -> safenet: UpdateMD( XoRName(thing_id),\nstatus = 'published')
 activate safenet
 
-safeot <-- safenet: Ok
+framework <-- safenet: Ok
 deactivate safenet
 
-admin <-- safeot: Ok(status = 'published')
-deactivate safeot
+admin <-- framework: Ok(status = 'published')
+deactivate framework
 
 owner <-- admin: Status = 'published'
 deactivate admin

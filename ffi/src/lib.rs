@@ -1,11 +1,11 @@
-extern crate safe_o_t;
+extern crate safe_thing;
 
-use safe_o_t::{SAFEoT, ThingAttr};
+use safe_thing::{SAFEthing, ThingAttr};
 use std::slice;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 
-pub type SAFEoTHandle = *mut SAFEoT;
+pub type SAFEthingHandle = *mut SAFEthing;
 
 pub type ErrorCode = i32;
 
@@ -16,18 +16,18 @@ pub struct FfiThingAttr {
 }
 
 #[no_mangle]
-pub extern "C" fn safe_o_t_new(thing_id: *const c_char) -> SAFEoTHandle {
+pub extern "C" fn safe_thing_new(thing_id: *const c_char) -> SAFEthingHandle {
     unsafe {
         let id = CStr::from_ptr(thing_id);
         let id_str = id.to_str().unwrap();
-        let safeot: Box<SAFEoT> = Box::new(SAFEoT::new(id_str).unwrap());
-        let _handle = Box::into_raw(safeot);
+        let safe_thing: Box<SAFEthing> = Box::new(SAFEthing::new(id_str).unwrap());
+        let _handle = Box::into_raw(safe_thing);
         _handle
     }
 }
 
 #[no_mangle]
-pub extern "C" fn safe_o_t_register_thing(handle: SAFEoTHandle,
+pub extern "C" fn safe_thing_register_thing(handle: SAFEthingHandle,
                                     attrs: *const FfiThingAttr, attrs_len: usize) -> ErrorCode {
     unsafe {
         let ffi_attrs = slice::from_raw_parts(attrs, attrs_len).to_vec();
@@ -44,7 +44,7 @@ pub extern "C" fn safe_o_t_register_thing(handle: SAFEoTHandle,
 }
 
 #[no_mangle]
-pub extern "C" fn safe_o_t_publish_thing(handle: SAFEoTHandle,
+pub extern "C" fn safe_thing_publish_thing(handle: SAFEthingHandle,
                                             thing_id: *const c_char) -> ErrorCode {
     unsafe {
         let id = CStr::from_ptr(thing_id);
@@ -55,7 +55,7 @@ pub extern "C" fn safe_o_t_publish_thing(handle: SAFEoTHandle,
 }
 
 #[no_mangle]
-pub extern "C" fn safe_o_t_delete(handle: SAFEoTHandle) {
+pub extern "C" fn safe_thing_delete(handle: SAFEthingHandle) {
     unsafe {
         if handle.is_null() {return}
         let _ = Box::from_raw(handle);
