@@ -7,17 +7,18 @@ mod errors;
 extern crate serde_json;
 
 use std::collections::BTreeMap;
-use std::thread;
-use std::time::Duration;
+//use std::thread;
 use comm::{SAFEoTComm, ActionArgs};
 use errors::{ResultReturn, Error, ErrorCode};
 use std::fmt;
 
-/// Which set of Things are allow to register to a topic
-/// Thing: access only to the thing's application.
+const THING_ID_MIN_LENGTH: usize = 5;
+
+/// Group of SAFEthings that are allow to register to a topic
+/// Thing: access only to the thing's application. This is the default and lowest level of access type.
 /// Owner: access also is allowed to an individual, application or system that is the actual owner of the Thing, plus the Thing itself.
 /// Group: access to a group of individuals or Things, plus the Owner and the Thing itself.
-/// All: access is allowed to anyone or anything, including Owner and the Thing itself.
+/// All: access is allowed to anyone or anything, including the Thing itself.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AccessType {
     Thing,
@@ -107,17 +108,19 @@ struct EventFilter {
     arg_value: String
 }
 
-/// A subscription is a map from Topic to a list of filters
+/// A subscription is a map from Topic to a list of filters.
+/// This is just a cache since it's all stored in the network.
 type Subscription = BTreeMap<String, Vec<EventFilter>>;
 
 pub struct SAFEoT {
     pub thing_id: String,
     safeot_comm: SAFEoTComm,
     subscriptions: BTreeMap<String, Subscription>,
-    notifs_cb: fn(&str, &str, &str)
+    //notifs_cb: fn(&str, &str, &str)
 }
 
 impl SAFEoT {
+    #[allow(unused_variables)]
     pub fn new(thing_id: &str, auth_token: &str, notifs_cb: fn(&str, &str, &str)) -> ResultReturn<SAFEoT> {
         println!("SAFEoT instance created with Thing ID: {}", thing_id);
 /*
@@ -137,11 +140,16 @@ impl SAFEoT {
             }
         });
 */
+        if thing_id.len() < THING_ID_MIN_LENGTH {
+            return Err(Error::new(ErrorCode::InvalidParameters,
+                format!("Thing ID must be at least {} bytes long", THING_ID_MIN_LENGTH).as_str()));
+        }
+
         let safeot = SAFEoT {
-            thing_id: String::from(thing_id),
+            thing_id: thing_id.to_string(),
             safeot_comm: SAFEoTComm::new(thing_id, auth_token)?,
             subscriptions: BTreeMap::new(),
-            notifs_cb: notifs_cb
+            //notifs_cb: notifs_cb
         };
 
         Ok(safeot)
@@ -152,21 +160,21 @@ impl SAFEoT {
     pub fn register_thing(&mut self, attrs: Vec<ThingAttr>,
                             topics: Vec<Topic>, actions: Vec<ActionDef>) -> ResultReturn<()> {
         // Register it in the network
-        self.safeot_comm.store_thing_entity(15000);
+        let _ = self.safeot_comm.store_thing_entity(15000);
 
         // Populate entity with attributes
         let attrs: String = serde_json::to_string(&attrs).unwrap();
-        self.safeot_comm.set_attributes(attrs.as_str());
+        let _ = self.safeot_comm.set_attributes(attrs.as_str());
 
         // Populate entity with topics
         let topics: String = serde_json::to_string(&topics).unwrap();
-        self.safeot_comm.set_topics(topics.as_str());
+        let _ = self.safeot_comm.set_topics(topics.as_str());
 
         // Populate entity with actions
         let actions: String = serde_json::to_string(&actions).unwrap();
-        self.safeot_comm.set_actions(actions.as_str());
+        let _ = self.safeot_comm.set_actions(actions.as_str());
 
-        self.safeot_comm.set_status("Registered");
+        let _ = self.safeot_comm.set_status("Registered");
 
         println!("Thing registered wih id: {}", self.thing_id);
         Ok(())
@@ -215,7 +223,7 @@ impl SAFEoT {
     pub fn publish_thing(&mut self, thing_id: &str) -> ResultReturn<()> {
         // Publish it in the network
         println!("Thing published wih id {:?}", thing_id);
-        self.safeot_comm.set_status("Published");
+        let _ = self.safeot_comm.set_status("Published");
         Ok(())
     }
 
@@ -248,6 +256,7 @@ impl SAFEoT {
     }
 
     /// Send an action request to a Thing and wait for response
+    #[allow(unused_variables)]
     pub fn action_request(&self, thing_id: &str, action: &str, args: ActionArgs) -> ResultReturn<&str> {
         // Search on the network by thing_id
         //self.safeot_comm.send_action_request(thing_id, action, args).ok_or("Action request failure".to_owned())

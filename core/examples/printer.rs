@@ -1,7 +1,5 @@
 extern crate safe_o_t;
 
-use std::thread;
-use std::time::Duration;
 use safe_o_t::{SAFEoT, ThingAttr, Topic, ActionDef, AccessType};
 
 fn print_requested_notif(thing_id: &str, topic: &str, data: &str) {
@@ -9,17 +7,17 @@ fn print_requested_notif(thing_id: &str, topic: &str, data: &str) {
 }
 
 pub fn main() {
-    let id = "printer-serial-number-1";
-    let auth_token = "safe-bmV0Lm1haWRzYWZlLnRlc3Qud2ViYXBwLmlk:AAAAAX54wJsAAAAAAAAAAAAAAAAAAAAgyK2b4gfAQVuMmjIHW6g0wLN6JsiM-rFxVFkHIvBrThgAAAAAAAAAILSMNzIsMsb3RbWkpS34xA5Gro74XCeoNf-ScnxU4PyHAAAAAAAAACCkMBe7eSn224RJsH9kOeWLRExeP2J4daX_cpiGdyx5nQAAAAAAAABA1No25wKSvXFiexPQGYer1zZNgnVcTl7iHFwtVa7MZl-kMBe7eSn224RJsH9kOeWLRExeP2J4daX_cpiGdyx5nQAAAAAAAAAgqyJzijuoO_aYFL9rRmP2oUXFIVJqLq2Z44sb8CYQQyUAAAAAAAAAIM6Qb6BgqGiQMs51WujArJ0ISll2QQNh-m_bBnrBIgoEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIM41EhSoR2AniPZYpv8QTpTAJzB8Eiau5TZF5DqWD2TeAAAAAAAAOpgAAAAAAAAAGETLKLNYCX5hkDQRCgTjoAEX8OeZdEUwyQ";
+    let id = "printer-serial-number-01010101";
+    let auth_token = "safe-bmv0lm1hawrzywzllmv4yw1wbgvzlm1krxhhbxbszq:AQAAAOIDI_gAAAAAAAAAACAAAAAAAAAAGWzDHH2GG-TUtS_qLvytHNXrAPWGtI6QLDuoP28EE_0gAAAAAAAAALPyoRvbtvPKs9bWYgsQvT3strDfQsw4HXRzNW_cfmxTIAAAAAAAAAD_a6ysxSGIUWz9pOLlq9hRMM-EJQctDpVkhRTXPar-W0AAAAAAAAAA-O8HsVV5ZZbiAwWTTFXQeNX7pSYtLmZXRHnrdVyXZvv_a6ysxSGIUWz9pOLlq9hRMM-EJQctDpVkhRTXPar-WyAAAAAAAAAAUnTeCf39C-KDfioarbgDedqYhu_ZEpCHK_CatkiYNFUgAAAAAAAAAOTkFE7GibxaH0egTV1NtczggZkyAsCVRY6AcbceiSNfAAAAAAAAAAAAAAAAAAAAAAAAAAAAMCralz2EJh0ML2wMZLBhh0hELI1dIQUlVtaWHqIClqmYOgAAAAAAABgAAAAAAAAA2lo16ByCIq4SnojMIRPV_RSvQIOelGUD";
 
     let attributes = vec![
         ThingAttr::new("name", "Printer at home"),
         ThingAttr::new("model", "HP LaserJet 400 M401"),
         ThingAttr::new("firmware", "v1.3.0"),
         ThingAttr::new("status", "on"),
-        ThingAttr::new("ink-level", "70%"),
+        ThingAttr::new("ink-level", "%"),
         ThingAttr::new("service-price", "1"),
-        ThingAttr::new("payment-timeout", "60000"),
+        ThingAttr::new("payment-window", "60000"),
         ThingAttr::new("wallet", "1KbCJfktc1JaKAwRtb42G8iNyhhh9zXRi4")
     ];
     let topics = vec![
@@ -46,7 +44,6 @@ pub fn main() {
     }
 
     let _ = safeot.register_thing(attributes, topics, actions);
-    thread::sleep(Duration::from_secs(2));
 
     match safeot.get_thing_status(id) {
         Ok(status) => println!("\nWe got status: {:?}", status),
@@ -85,5 +82,4 @@ pub fn main() {
     let _ = safeot.notify("printRequested", "print job started");
 */
 
-    thread::sleep(Duration::from_secs(2));
 }

@@ -2,6 +2,9 @@ extern crate safe_app;
 extern crate safe_core;
 extern crate rust_sodium;
 extern crate rustc_serialize;
+extern crate futures;
+//extern crate futures_cpupool;
+extern crate tokio_timer;
 
 use self::safe_app::App;
 use self::safe_app::object_cache::{MDataInfoHandle, MDataPermissionSetHandle,
@@ -11,7 +14,7 @@ use self::safe_app::ffi::ipc::decode_ipc_msg;
 use self::safe_app::ffi::mdata_info::mdata_info_new_public;
 use self::safe_app::ffi::mutable_data::permissions::{MDataAction, mdata_permission_set_new,
     mdata_permissions_set_allow, mdata_permissions_new, mdata_permissions_insert};
-use self::safe_app::ffi::mutable_data::{mdata_put, mdata_mutate_entries};
+use self::safe_app::ffi::mutable_data::{mdata_put, mdata_mutate_entries, mdata_get_value};
 use self::safe_app::ffi::mutable_data::entry_actions::{mdata_entry_actions_new, mdata_entry_actions_insert};
 use self::safe_app::ffi::misc::app_pub_sign_key;
 use self::safe_core::ipc::resp::ffi::AuthGranted;
@@ -20,10 +23,17 @@ use self::rust_sodium::crypto::hash::sha256::Digest;
 use self::rustc_serialize::base64::{CharacterSet, Config, FromBase64, FromBase64Error, Newline, ToBase64};
 
 use errors::{ResultReturn, Error, ErrorCode};
+
 use std::collections::BTreeMap;
 use std::os::raw::{c_char, c_void, c_int};
 use std::ptr::null_mut;
 use std::ffi::CString;
+use std::slice;
+use std::time::Duration;
+
+use self::futures::Future;
+//use self::futures_cpupool::CpuPool;
+use self::tokio_timer::Timer;
 
 static SAFE_o_T_ENTRY_APP_STATUS: &'static str = "_safeot_app_status";
 
@@ -58,9 +68,21 @@ pub struct SAFEoTComm {
     topic_events: BTreeMap<String, String>
 }
 
+// BEGIN: MutableData retrieve values callbacks
+extern "C" fn mdata_get_value_callabck(safeot_c_void: *mut c_void, err: i32, value_ptr: *const u8, value_len: usize, version: u64) {
+    unsafe {
+        let value = slice::from_raw_parts(value_ptr, value_len).to_vec();
+        let v = String::from_utf8(value).unwrap();
+        println!("MutableData value retrieved {} {:?}", err, v);
+    };
+}
+
 // BEGIN: MutableData Mutations callbacks
 extern "C" fn mdata_mutate_entries_callback(safeot_c_void: *mut c_void, err: i32) {
     println!("MutableData entry actions mutated {}", err);
+    if err == -107 {
+        println!("MutableData entry already exits");
+    }
 }
 
 extern "C" fn mdata_entry_actions_insert_callback(safeot_c_void: *mut c_void, err: i32) {
@@ -87,9 +109,12 @@ extern "C" fn mdata_entry_actions_callback(safeot_c_void: *mut c_void, err: i32,
 // END: MutableData Mutations callbacks
 
 
-// BEGIN: MutableData callbacks
+// BEGIN: MutableData creation/retrieval callbacks
 extern "C" fn mdata_put_callback(safeot_c_void: *mut c_void, err: i32) {
     println!("MutableData put in network {}", err);
+    if err == -104 {
+        println!("MutableData already exits");
+    }
 }
 
 extern "C" fn perms_insert_callback(safeot_c_void: *mut c_void, err: i32) {
@@ -110,19 +135,19 @@ extern "C" fn new_perms_callback(safeot_c_void: *mut c_void, err: i32, perms_h: 
     };
 }
 
-extern "C" fn perms_set_action_callback2(safeot_c_void: *mut c_void, err: i32) {
+extern "C" fn perms_allow_update_callback(safeot_c_void: *mut c_void, err: i32) {
     println!("PermissionSet set with action update done {}", err);
     unsafe {
         let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
         mdata_permissions_new(safeot.safe_app, safeot_c_void, new_perms_callback)
     };
 }
-extern "C" fn perms_set_action_callback(safeot_c_void: *mut c_void, err: i32) {
+extern "C" fn perms_allow_intert_callback(safeot_c_void: *mut c_void, err: i32) {
     println!("PermissionSet set with action insert done {}", err);
     unsafe {
         let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
         let action = MDataAction::Update;
-        mdata_permissions_set_allow(safeot.safe_app, safeot.perm_set_h, action, safeot_c_void, perms_set_action_callback2)
+        mdata_permissions_set_allow(safeot.safe_app, safeot.perm_set_h, action, safeot_c_void, perms_allow_update_callback)
     };
 }
 
@@ -132,7 +157,7 @@ extern "C" fn new_perm_set_callback(safeot_c_void: *mut c_void, err: i32, perm_s
         let safeot: &mut SAFEoTComm = &mut *(safeot_c_void as *mut SAFEoTComm);
         safeot.perm_set_h = perm_set_h;
         let action = MDataAction::Insert;
-        mdata_permissions_set_allow(safeot.safe_app, safeot.perm_set_h, action, safeot_c_void, perms_set_action_callback)
+        mdata_permissions_set_allow(safeot.safe_app, safeot.perm_set_h, action, safeot_c_void, perms_allow_intert_callback)
     };
 }
 
@@ -186,6 +211,13 @@ extern "C" fn error_cb(user_data: *mut c_void, err: i32, b: u32) {
 
 #[allow(unused_variables)]
 impl SAFEoTComm {
+    // FIXME: this is temporary until futures are implemented
+    fn sleep(m: u64) {
+        let timer = Timer::default();
+        let _ = timer.sleep(Duration::from_millis(m))
+            .wait();
+    }
+
     pub fn new(thing_id: &str, auth_token: &str) -> ResultReturn<SAFEoTComm> {
         let mut safeot_comm = SAFEoTComm {
             thing_id: String::from(thing_id),
@@ -197,7 +229,7 @@ impl SAFEoTComm {
             perms_h: Default::default(),
             entry_actions_h: Default::default(),
             xor_name: Default::default(),
-            // This are attributes of the app itself which are just cached here
+            // These are attributes of the Thing itself which are just cached here
             status: String::from("Unknown"),
 
             // the following are temporary
@@ -207,41 +239,33 @@ impl SAFEoTComm {
             subscriptions: String::from("[]"),
             topic_events: BTreeMap::new(),
         };
+
         let safeot_comm_c_void_ptr = &mut safeot_comm as *mut _ as *mut c_void;
+        let mut uri: CString = Default::default();
+        match CString::new(auth_token) {
+            Ok(v) => uri = v,
+            Err(e) => return Err(Error::new(ErrorCode::InvalidParameters,
+                                                format!("Auth token is invalid: {}", e).as_str()))
+        };
+
         unsafe {
-            let uri = CString::new(auth_token).unwrap();
+            // Connect to the SAFE network using the auth URI
             decode_ipc_msg(uri.as_ptr(), safeot_comm_c_void_ptr, auth_cb, containers_cb, revoked_cb, error_cb);
         };
+
+        SAFEoTComm::sleep(1000);
 
         Ok(safeot_comm)
     }
 
-    pub fn get_thing_status(&self, thing_id: &str) -> ResultReturn<String> {
-        Ok(self.status.clone())
-    }
-
+    // TODO: remove this as it's just for debugging
+    #[allow(dead_code)]
     pub fn get_conn_status(&self) {
-        match (self.conn_status) {
+        match self.conn_status {
             ConnStatus::INIT => println!("CONN STATUS: INIT"),
             ConnStatus::UNREGISTERED => println!("CONN STATUS: UNREGISTERED"),
             ConnStatus::REGISTERED => println!("CONN STATUS: REGISTERED"),
         }
-    }
-
-    pub fn get_thing_addr_name(&self, thing_id: &str) -> ResultReturn<String> {
-        Ok(self.xor_name.clone())
-    }
-
-    pub fn get_thing_attrs(&self, thing_id: &str) -> ResultReturn<String> {
-        Ok(self.attrs.clone())
-    }
-
-    pub fn get_thing_topics(&self, thing_id: &str) -> ResultReturn<String> {
-        Ok(self.topics.clone())
-    }
-
-    pub fn get_thing_actions(&self, thing_id: &str) -> ResultReturn<String> {
-        Ok(self.actions.clone())
     }
 
     pub fn store_thing_entity(&mut self, type_tag: u64) -> ResultReturn<String> {
@@ -252,54 +276,95 @@ impl SAFEoTComm {
             let mut safeot_comm_c_void_ptr = self as *mut _ as *mut c_void;
             mdata_info_new_public(self.safe_app, &xor_name, type_tag, safeot_comm_c_void_ptr, new_md_callback);
         };
+
+        SAFEoTComm::sleep(1000);
+
         self.xor_name = sha256.as_ref().to_base64(config());
+        Ok(self.xor_name.clone())
+    }
+
+    // TODO: read from the network
+    pub fn get_thing_addr_name(&self, thing_id: &str) -> ResultReturn<String> {
         Ok(self.xor_name.clone())
     }
 
     pub fn set_status(&mut self, status: &str) -> ResultReturn<()> {
         self.status = String::from(status);
         unsafe {
-            let mut safeot_comm_c_void_ptr = self as *mut _ as *mut c_void;
+            let safeot_comm_c_void_ptr = self as *mut _ as *mut c_void;
             mdata_entry_actions_new(self.safe_app, safeot_comm_c_void_ptr, mdata_entry_actions_callback);
         };
         Ok(())
     }
 
+    // TODO: read from the network
+    pub fn get_thing_status(&self, thing_id: &str) -> ResultReturn<String> {
+        unsafe {
+            let safeot_comm_c_void_ptr = self as *const _ as *mut c_void;
+            let key = SAFE_o_T_ENTRY_APP_STATUS;
+            mdata_get_value(self.safe_app, self.mutable_data_h, key.as_ptr(), key.len(), safeot_comm_c_void_ptr, mdata_get_value_callabck);
+        };
+        Ok(self.status.clone())
+    }
+
+    // TODO: store it in the network
     pub fn set_attributes(&mut self, attrs: &str) -> ResultReturn<()> {
         self.attrs = String::from(attrs);
         Ok(())
     }
 
+    // TODO: read from the network
+    pub fn get_thing_attrs(&self, thing_id: &str) -> ResultReturn<String> {
+        Ok(self.attrs.clone())
+    }
+
+    // TODO: store it in the network
     pub fn set_topics(&mut self, topics: &str) -> ResultReturn<()> {
         self.topics = String::from(topics);
         Ok(())
     }
 
+    // TODO: read from the network
+    pub fn get_thing_topics(&self, thing_id: &str) -> ResultReturn<String> {
+        Ok(self.topics.clone())
+    }
+
+    // TODO: store it in the network
     pub fn set_actions(&mut self, actions: &str) -> ResultReturn<()> {
         self.actions = String::from(actions);
         Ok(())
     }
 
+    // TODO: read from the network
+    pub fn get_thing_actions(&self, thing_id: &str) -> ResultReturn<String> {
+        Ok(self.actions.clone())
+    }
+
+    // TODO: store it in the network
     pub fn set_subscriptions(&mut self, subscriptions: &str) -> ResultReturn<()> {
         self.subscriptions = String::from(subscriptions);
         Ok(())
     }
 
+    // TODO: store it in the network
     pub fn set_topic_events(&mut self, topic: &str, events: &str) -> ResultReturn<()> {
         self.topic_events.insert(String::from(topic), String::from(events));
         Ok(())
     }
 
+    // TODO: read from the network
+    #[allow(dead_code)]
     pub fn get_topic_events(&mut self, topic: &str) -> ResultReturn<(String)> {
         let events = self.topic_events.get(&String::from(topic)).unwrap();
         Ok(events.clone())
     }
 
+    // TODO: store it in the network
+    #[allow(dead_code)]
     pub fn send_action_request(&self, thing_id: &str, action: &str, args: ActionArgs) -> ResultReturn<String> {
         //self.events.push((String::from(topic), String::from(data)));
         Ok(String::from("response"))
     }
-
 }
 
 #[inline]
