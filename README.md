@@ -1,7 +1,8 @@
 # SAFEthing Framework
+**S**ecure **A**ccess **F**or **E**very**thing**
 
 
-### Goals
+### Project Goals
 - Provide IoT software developers with an easy and straight forward way to integrate their IoT devices to the SAFE network without worrying about network, security and/or authentication & authorisation protocols.
 - Create a project which can be used as a knowledge base for developers trying to learn and implement software for the SAFE network.
 - Allow the SAFE network community to participate in a project which creates added value for the SAFE network, and which leads to help promoting it and to achieve mass adoption.
@@ -17,7 +18,7 @@ In an analogous way as to how the SAFE network itself provides different program
 
 A WebService API will also be created on top of the Rust API to allow the communication with the SAFEthings network thru a REST interface. This is mainly intended to support smart home devices, and tools potentially needed to provision them.
 
-![SAFEthing Library Stack](misc/SAFEthing Stack.png)
+![SAFEthing Library Stack](misc/SAFEthing_Stack.png)
 
 ### SAFEthings
 When a SAFEthing registers to the network it provides a set of information which describes its behaviour, functionality and/or service it exposes.
