@@ -120,6 +120,11 @@ pub fn main() {
 ```
 
 ### Project Development Roadmap
-TODO
-- [x] TODO
-- [ ] TODO
+
+- [ ] Cross-compilation tools for MIPS
+- [ ] Cross-compilation tools for ARM
+- [ ] Creation of test suite for API
+- [ ] Implementation of FFI interface
+- [ ] Implementation of Javascript binding
+- [ ]
+- [ ] Implementation of WebService API

@@ -54,7 +54,7 @@ pub fn main() {
         Ok(addr_name) => println!("\nWe got address name: {:?}", addr_name),
         Err(e) => println!("We got a problem!: {}", e)
     }
-/*
+
     match safe_thing.get_thing_attrs(id) {
         Ok(attrs) => println!("\nWe got attrs: {:?}", attrs),
         Err(e) => println!("We got a problem!: {}", e)
@@ -69,7 +69,7 @@ pub fn main() {
         Ok(actions) => println!("\nWe got actions: {:?}", actions),
         Err(e) => println!("We got a problem!: {}", e)
     }
-
+/*
     let _ = safe_thing.publish_thing(id);
     match safe_thing.get_thing_status(id) {
         Ok(status) => println!("\nWe got status: {:?}", status),

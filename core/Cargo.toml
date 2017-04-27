@@ -6,6 +6,7 @@ license = "GPL-3.0"
 
 [features]
 use-mock-routing = ["safe_app/use-mock-routing"]
+testing = ["safe_app/testing"]
 
 [dependencies]
 safe_app = { git = "https://github.com/maidsafe/safe_client_libs.git", path = "safe_app", branch = "dev" }

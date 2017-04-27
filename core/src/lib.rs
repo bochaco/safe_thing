@@ -3,6 +3,7 @@ extern crate serde_derive;
 
 mod comm;
 mod errors;
+mod native;
 
 extern crate serde_json;
 
@@ -122,7 +123,6 @@ pub struct SAFEthing {
 impl SAFEthing {
     #[allow(unused_variables)]
     pub fn new(thing_id: &str, auth_uri: &str, notifs_cb: fn(&str, &str, &str)) -> ResultReturn<SAFEthing> {
-        println!("SAFEthing instance created with Thing ID: {}", thing_id);
 /*
         let thread = thread::spawn(move || {
             loop {
@@ -151,6 +151,7 @@ impl SAFEthing {
             subscriptions: BTreeMap::new(),
             //notifs_cb: notifs_cb
         };
+        println!("SAFEthing instance created with Thing ID: {}", thing_id);
 
         Ok(safe_thing)
     }
@@ -160,7 +161,7 @@ impl SAFEthing {
     pub fn register_thing(&mut self, attrs: Vec<ThingAttr>,
                             topics: Vec<Topic>, actions: Vec<ActionDef>) -> ResultReturn<()> {
         // Register it in the network
-        let _ = self.safe_thing_comm.store_thing_entity(15000);
+        let _ = self.safe_thing_comm.store_thing_entity();
 
         // Populate entity with attributes
         let attrs: String = serde_json::to_string(&attrs).unwrap();
