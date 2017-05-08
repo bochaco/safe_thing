@@ -1,7 +1,6 @@
 # SAFEthing Framework
 **S**ecure **A**ccess **F**or **E**very**thing**
 
-
 ### Project Goals
 - Provide IoT software developers with an easy and straight forward way to integrate their IoT devices to the SAFE network without worrying about network, security and/or authentication & authorisation protocols.
 - Create a project which can be used as a knowledge base for developers trying to learn and implement software for the SAFE network.
@@ -12,7 +11,7 @@
 ### The Library and API
 The SAFEthing library is composed of several parts but its core is just a Rust crate with a simple and well defined Rust API.
 
-Internally it contains all the mechanisms to communicate with the SAFE network thru the `safe_client_libs`, abstracting the client application from all of it without the need for the application developer to even understand how the SAFE network works.
+Internally it contains all the mechanisms to communicate with the SAFE network thru the [safe_client_libs](https://github.com/maidsafe/safe_client_libs), abstracting the client application from all of it without the need for the application developer to even understand how the SAFE network works.
 
 In an analogous way as to how the SAFE network itself provides different programming languages bindings, there will be a SAFEthing Rust FFI interface which can be used to interact with the API from any programming language, like C/C++, but also a set of different language bindings so people can develop their SAFEthings software even with JavaScript, Python, Lua, etc.
 
@@ -33,13 +32,13 @@ On the other hand, some attributes could contain dynamic values which are update
 #### Topics
 A SAFEthing can expose a set of topics that other SAFEthings can subcribe to in order to receive notifications upon events.
 
-Different events result in different type of notifications, a topic can describe a certain type of events, depending how the SAFEthing s design to expose them.
+Different events result in different type of notifications, a topic can describe a certain type of events, depending on how the SAFEthing is designed to expose them.
 
-As an example, the temperature sensor can expose a 'temperature change" topic that another SAFEthing can subscribe to and receive noifications upon a temperature change event.
+As an example, the temperature sensor can expose a "temperature change" topic that another SAFEthing can subscribe to and receive notifications upon a temperature change event.
 
 When subscribing to a topic, a set of filters can optionally be provided in order to reduce the notifications to be received to just those which the subscriber is really interested in. E.g. a SAFEthing might be interested in being notified only if the current temperature goes over a threshold.
 
-TODO: describe subscribtions and notifications filters & parameters
+TODO: describe subscriptions and notifications filters & parameters
 
 #### Actions
 Another way to interact with a SAFEthing is by requesting an action. The set of actions are usually static but there could be cases that a SAFEthing wants to expose some actions only in certain moments or periods of time.
@@ -51,7 +50,7 @@ The execution of an action is asynchronous. When an action is requested to a SAF
 #### Access Type
 SAFEthing's Attributes, Topics, and Actions, are associated to an Access Type. The Access Type defines the set of SAFEthings that are allow to access the exposed functionality and information.
 
-As an example, the data you send to a SAFEthing printer should be encrypted and available to access by the sender and the printer devices only. Or if you have a set of devices at home that interact among them, you will want that only your devices can see each other's information and functionalities but noone else.
+As an example, the data you send to a SAFEthing printer should be encrypted and available to access by the sender and the printer devices only. Or if you have a set of devices at home that interact among them, you will want that only your devices can see each other's information and functionalities but no one else.
 
 
 ### The Communication Protocol
@@ -81,7 +80,7 @@ fn print_requested_notif(thing_id: &str, topic: &str, data: &str) {
 
 pub fn main() {
     let id = "printer-serial-number-01010101";
-    let auth_uri = "safe-bmv0lm1hawrzywzllmv4yw1wbgvzlm1krxhhbxbszq:AQAAAOIDI_gAAAAAAAAAACAAAAAAAAAAGWzDHH2GG-TUtS_qLvytHNXrAPWGtI6QLDuoP28EE_0gAAAAAAAAALPyoRvbtvPKs9bWYgsQvT3strDfQsw4HXRzNW_cfmxTIAAAAAAAAAD_a6ysxSGIUWz9pOLlq9hRMM-EJQctDpVkhRTXPar-W0AAAAAAAAAA-O8HsVV5ZZbiAwWTTFXQeNX7pSYtLmZXRHnrdVyXZvv_a6ysxSGIUWz9pOLlq9hRMM-EJQctDpVkhRTXPar-WyAAAAAAAAAAUnTeCf39C-KDfioarbgDedqYhu_ZEpCHK_CatkiYNFUgAAAAAAAAAOTkFE7GibxaH0egTV1NtczggZkyAsCVRY6AcbceiSNfAAAAAAAAAAAAAAAAAAAAAAAAAAAAMCralz2EJh0ML2wMZLBhh0hELI1dIQUlVtaWHqIClqmYOgAAAAAAABgAAAAAAAAA2lo16ByCIq4SnojMIRPV_RSvQIOelGUD";
+    let auth_uri = "safe-bmv0lm1hawrzywzllmv4yw1wbgvzlm1krxhhbxbszq:AQAAAOIDI_gAAAAAAAAAACAAAAAAAAAAGWzDHH2GG-TUtS_qLvytHNXrAPWGtI6QLDuoP28EE_0gAAAAAAAAALPyoRvbtvPKs9bWYhkdhfkltybFTBJerAWEARetysrtvsjSRTHVRTA_a6ysxSGIUWz9pOLlq9hRMM-EJQctDpVkhRTXPar-W0AAAAAAAAAA-O8HsVV5ZZbiAwWTTFXQeNX7pSYtLmZXRHnrdVyXZvv_a6ysxSGIUWz9pOLlq9hRMM-EJQctDpVkhRTXPar-WyAAAAAAAAAAUnTeCf39C-KDfioarbgDedqYhu_ZEpCHK_CatkiYNFUgAAAAAAAAAOTkFE7GibxaH0egTV1NtczggZkyAsCVRY6AcbceiSNfAAAAAAAAAAAAAAAAAAAAAAAAAAAAMCralz2EJh0ML2wMZLBhh0hELI1dIQUlVtaWHqIClqmYOgAAAAAAABgAAAAAAAAA2lo16ByCIq4SnojMIRPV_RSvQIOelGUD";
 
     let attributes = vec![
         ThingAttr::new("name", "Printer at home"),
