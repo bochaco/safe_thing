@@ -126,5 +126,5 @@ pub fn main() {
 - [ ] Creation of test suite for API
 - [ ] Implementation of FFI interface
 - [ ] Implementation of Javascript binding
-- [ ]
+- [ ] Documentation of the communication protocol
 - [ ] Implementation of WebService API

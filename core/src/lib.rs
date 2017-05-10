@@ -3,13 +3,13 @@ extern crate serde_derive;
 
 mod comm;
 mod errors;
-mod native;
+mod safe_net;
 
 extern crate serde_json;
 
 use std::collections::BTreeMap;
 //use std::thread;
-use comm::{SAFEthingComm, ActionArgs};
+use comm::{SAFEthingComm, ThingStatus, ActionArgs};
 use errors::{ResultReturn, Error, ErrorCode};
 use std::fmt;
 
@@ -32,18 +32,23 @@ pub enum AccessType {
 /// Unregistered: the Thing is not even registered in the network, only its ID is known in the framework
 /// Registered: the Thing was registered but it's not published yet, which means it's not operative yet for subscribers
 /// Published: the Thing was plublished and it's operative, allowing Things to subscribe an interact with it
+/// Disabled: the Thing was disabled and it's not operative, even that it's information may still be visible
 pub enum Status {
+    Unknown,
     Unregistered,
     Registered,
-    Published
+    Published,
+    Disabled
 }
 
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match *self {
+            Status::Unknown => "Unknown",
             Status::Unregistered => "Unregistered",
             Status::Registered => "Registered",
-            Status::Published => "Published"
+            Status::Published => "Published",
+            Status::Disabled => "Disabled"
         })
     }
 }
@@ -160,6 +165,7 @@ impl SAFEthing {
     /// events/topics and available actions
     pub fn register_thing(&mut self, attrs: Vec<ThingAttr>,
                             topics: Vec<Topic>, actions: Vec<ActionDef>) -> ResultReturn<()> {
+
         // Register it in the network
         let _ = self.safe_thing_comm.store_thing_entity();
 
@@ -175,17 +181,22 @@ impl SAFEthing {
         let actions: String = serde_json::to_string(&actions).unwrap();
         let _ = self.safe_thing_comm.set_actions(actions.as_str());
 
-        let _ = self.safe_thing_comm.set_status("Registered");
+        let _ = self.safe_thing_comm.set_status(ThingStatus::Registered);
 
-        println!("Thing registered wih id: {}", self.thing_id);
+        println!("Thing registered with id: {}", self.thing_id);
         Ok(())
     }
 
     /// Get status of a Thing
-    pub fn get_thing_status(&self, thing_id: &str) -> ResultReturn<String> {
+    pub fn get_thing_status(&mut self, thing_id: &str) -> ResultReturn<Status> {
         // Search on the network by thing_id
-        let status = self.safe_thing_comm.get_thing_status(thing_id)?;
-        Ok(status)
+        match self.safe_thing_comm.get_thing_status(thing_id) {
+            Ok(ThingStatus::Unknown) => Ok(Status::Unknown),
+            Ok(ThingStatus::Registered) => Ok(Status::Registered),
+            Ok(ThingStatus::Published) => Ok(Status::Published),
+            Ok(ThingStatus::Disabled) => Ok(Status::Disabled),
+            Err(err) => return Err(err)
+        }
     }
 
     /// Get address name of a Thing
@@ -219,12 +230,12 @@ impl SAFEthing {
         Ok(actions)
     }
 
-    /// Publish the thing making it available and operative in the network, allowing other Things
+    /// Publish the thing making it available and operative in the network, allowing other SAFEthings
     /// to request actions, subscribe to topics, and receive notifications upon events.
     pub fn publish_thing(&mut self, thing_id: &str) -> ResultReturn<()> {
         // Publish it in the network
-        println!("Thing published wih id {:?}", thing_id);
-        let _ = self.safe_thing_comm.set_status("Published");
+        let _ = self.safe_thing_comm.set_status(ThingStatus::Published);
+        println!("SAFEthing published with id {:?}", thing_id);
         Ok(())
     }
 

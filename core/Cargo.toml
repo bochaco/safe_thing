@@ -11,6 +11,7 @@ testing = ["safe_app/testing"]
 [dependencies]
 safe_app = { git = "https://github.com/maidsafe/safe_client_libs.git", path = "safe_app", branch = "dev" }
 safe_core = { git = "https://github.com/maidsafe/safe_client_libs.git", path = "safe_core", branch = "dev" }
+ffi_utils = { git = "https://github.com/maidsafe/safe_client_libs.git", path = "ffi_utils", branch = "dev" }
 serde = "0.9"
 serde_derive = "0.9"
 serde_json = "0.9"

@@ -46,7 +46,7 @@ pub fn main() {
     let _ = safe_thing.register_thing(attributes, topics, actions);
 
     match safe_thing.get_thing_status(id) {
-        Ok(status) => println!("\nWe got status: {:?}", status),
+        Ok(status) => println!("\nWe got status: {}", status),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
@@ -69,13 +69,13 @@ pub fn main() {
         Ok(actions) => println!("\nWe got actions: {:?}", actions),
         Err(e) => println!("We got a problem!: {}", e)
     }
-/*
+
     let _ = safe_thing.publish_thing(id);
     match safe_thing.get_thing_status(id) {
-        Ok(status) => println!("\nWe got status: {:?}", status),
+        Ok(status) => println!("\nWe got status: {}", status),
         Err(e) => println!("We got a problem!: {}", e)
     }
-
+/*
     let _ = safe_thing.subscribe(id, "printRequested");
     //thread::sleep(Duration::from_secs(5));
 
