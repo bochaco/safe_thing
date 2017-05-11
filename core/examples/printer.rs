@@ -38,41 +38,36 @@ pub fn main() {
     ];
 
     let mut safe_thing: SAFEthing;
-    match SAFEthing::new(id, auth_uri, print_requested_notif) {
+    match SAFEthing::new(id, auth_uri) {
         Ok(s) => safe_thing = s,
         Err(e) => panic!("{}", e)
     }
 
-    let _ = safe_thing.register_thing(attributes, topics, actions);
+    let _ = safe_thing.register(attributes, topics, actions, print_requested_notif);
 
-    match safe_thing.get_thing_status(id) {
-        Ok(status) => println!("\nWe got status: {}", status),
-        Err(e) => println!("We got a problem!: {}", e)
-    }
-
-    match safe_thing.get_thing_addr_name(id) {
-        Ok(addr_name) => println!("\nWe got address name: {:?}", addr_name),
+    match safe_thing.status() {
+        Ok(status) => println!("\nCurrent status: {}", status),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
     match safe_thing.get_thing_attrs(id) {
-        Ok(attrs) => println!("\nWe got attrs: {:?}", attrs),
+        Ok(attrs) => println!("\nAttributes: {:?}", attrs),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
     match safe_thing.get_thing_topics(id) {
-        Ok(topics) => println!("\nWe got topics: {:?}", topics),
+        Ok(topics) => println!("\nTopics: {:?}", topics),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
     match safe_thing.get_thing_actions(id) {
-        Ok(actions) => println!("\nWe got actions: {:?}", actions),
+        Ok(actions) => println!("\nActions: {:?}", actions),
         Err(e) => println!("We got a problem!: {}", e)
     }
 
-    let _ = safe_thing.publish_thing(id);
-    match safe_thing.get_thing_status(id) {
-        Ok(status) => println!("\nWe got status: {}", status),
+    let _ = safe_thing.publish();
+    match safe_thing.status() {
+        Ok(status) => println!("\nCurrent status: {}", status),
         Err(e) => println!("We got a problem!: {}", e)
     }
 /*

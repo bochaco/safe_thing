@@ -1,5 +1,3 @@
-extern crate safe_app;
-extern crate safe_core;
 extern crate rust_sodium;
 extern crate rustc_serialize;
 
@@ -16,10 +14,16 @@ use safe_net::{SAFENet, MutableData};
 
 
 const SAFE_THING_TYPE_TAG: u64 = 270417;
+
 static SAFE_THING_ENTRY_K_STATUS: &'static str = "_safe_thing_status";
 static SAFE_THING_ENTRY_V_STATUS_REGISTERED: &'static str = "Registered";
 static SAFE_THING_ENTRY_V_STATUS_PUBLISHED: &'static str = "Published";
 static SAFE_THING_ENTRY_V_STATUS_DISABLED: &'static str = "Disabled";
+
+static SAFE_THING_ENTRY_K_ATTRS: &'static str = "_safe_thing_attributes";
+static SAFE_THING_ENTRY_K_TOPICS: &'static str = "_safe_thing_topics";
+static SAFE_THING_ENTRY_K_ACTIONS: &'static str = "_safe_thing_actions";
+static SAFE_THING_ENTRY_K_SUBSCRIPTIONS: &'static str = "_safe_thing_subscriptions";
 
 #[derive(Debug)]
 pub enum ThingStatus {
@@ -38,10 +42,6 @@ pub struct SAFEthingComm {
     xor_name: String,
 
     // the following is temporary, we keep this in the safenet
-    attrs: String,
-    topics: String,
-    actions: String,
-    subscriptions: String,
     topic_events: BTreeMap<String, String>
 }
 
@@ -55,10 +55,6 @@ impl SAFEthingComm {
             xor_name: Default::default(),
 
             // the following are temporary
-            attrs: String::from("[]"),
-            topics: String::from("[]"),
-            actions: String::from("[]"),
-            subscriptions: String::from("[]"),
             topic_events: BTreeMap::new(),
         };
 
@@ -77,12 +73,7 @@ impl SAFEthingComm {
     }
 
     #[allow(dead_code)]
-    pub fn get_own_addr_name(&self) -> ResultReturn<String> {
-        Ok(self.xor_name.clone())
-    }
-
-    // TODO: read from the network
-    pub fn get_thing_addr_name(&self, thing_id: &str) -> ResultReturn<String> {
+    pub fn addr_name(&self) -> ResultReturn<String> {
         Ok(self.xor_name.clone())
     }
 
@@ -99,9 +90,8 @@ impl SAFEthingComm {
         Ok(())
     }
 
-    pub fn get_thing_status(&mut self, thing_id: &str) -> ResultReturn<ThingStatus> {
+    pub fn get_status(&mut self) -> ResultReturn<ThingStatus> {
         let mut status = ThingStatus::Unknown;
-        //let mdata = self.safe_net.find_mdata(thing_id);
         let status_str = self.safe_net.mutable_data_get_value(self.thing_mdata, SAFE_THING_ENTRY_K_STATUS)?;
         if status_str == SAFE_THING_ENTRY_V_STATUS_REGISTERED {
             status = ThingStatus::Registered;
@@ -113,42 +103,46 @@ impl SAFEthingComm {
         Ok(status)
     }
 
-    // TODO: store it in the network
     pub fn set_attributes(&mut self, attrs: &str) -> ResultReturn<()> {
-        self.attrs = String::from(attrs);
+        self.safe_net.mutable_data_set_value(self.thing_mdata, SAFE_THING_ENTRY_K_ATTRS, attrs)?;
         Ok(())
     }
 
-    // TODO: read from the network
+    // private helper
+    fn get_mdata(&self, thing_id: &str) -> ResultReturn<MutableData> {
+        let Digest(sha256) = sha256::hash(thing_id.as_bytes());
+        let mut xor_name: [u8; 32] = Default::default();
+        xor_name.copy_from_slice(sha256.as_ref());
+        self.safe_net.get_pub_mutable_data(xor_name, SAFE_THING_TYPE_TAG)
+    }
+
     pub fn get_thing_attrs(&self, thing_id: &str) -> ResultReturn<String> {
-        Ok(self.attrs.clone())
+        let thing_mdata = self.get_mdata(thing_id)?;
+        self.safe_net.mutable_data_get_value(thing_mdata, SAFE_THING_ENTRY_K_ATTRS)
     }
 
-    // TODO: store it in the network
     pub fn set_topics(&mut self, topics: &str) -> ResultReturn<()> {
-        self.topics = String::from(topics);
+        self.safe_net.mutable_data_set_value(self.thing_mdata, SAFE_THING_ENTRY_K_TOPICS, topics)?;
         Ok(())
     }
 
-    // TODO: read from the network
     pub fn get_thing_topics(&self, thing_id: &str) -> ResultReturn<String> {
-        Ok(self.topics.clone())
+        let thing_mdata = self.get_mdata(thing_id)?;
+        self.safe_net.mutable_data_get_value(thing_mdata, SAFE_THING_ENTRY_K_TOPICS)
     }
 
-    // TODO: store it in the network
     pub fn set_actions(&mut self, actions: &str) -> ResultReturn<()> {
-        self.actions = String::from(actions);
+        self.safe_net.mutable_data_set_value(self.thing_mdata, SAFE_THING_ENTRY_K_ACTIONS, actions)?;
         Ok(())
     }
 
-    // TODO: read from the network
     pub fn get_thing_actions(&self, thing_id: &str) -> ResultReturn<String> {
-        Ok(self.actions.clone())
+        let thing_mdata = self.get_mdata(thing_id)?;
+        self.safe_net.mutable_data_get_value(thing_mdata, SAFE_THING_ENTRY_K_ACTIONS)
     }
 
-    // TODO: store it in the network
     pub fn set_subscriptions(&mut self, subscriptions: &str) -> ResultReturn<()> {
-        self.subscriptions = String::from(subscriptions);
+        self.safe_net.mutable_data_set_value(self.thing_mdata, SAFE_THING_ENTRY_K_SUBSCRIPTIONS, subscriptions)?;
         Ok(())
     }
 

@@ -17,9 +17,9 @@ const THING_ID_MIN_LENGTH: usize = 5;
 
 /// Group of SAFEthings that are allow to register to a topic
 /// Thing: access only to the thing's application. This is the default and lowest level of access type.
-/// Owner: access also is allowed to an individual, application or system that is the actual owner of the Thing, plus the Thing itself.
-/// Group: access to a group of individuals or Things, plus the Owner and the Thing itself.
-/// All: access is allowed to anyone or anything, including the Thing itself.
+/// Owner: access also is allowed to an individual, application or system that is the actual owner of the SAFEthing, plus the SAFEthing itself.
+/// Group: access to a group of individuals or SAFEthings, plus the Owner and the SAFEthing itself.
+/// All: access is allowed to anyone or anything, including the SAFEthing itself.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AccessType {
     Thing,
@@ -28,11 +28,11 @@ pub enum AccessType {
     All
 }
 
-/// Status of the Thing in the network
-/// Unregistered: the Thing is not even registered in the network, only its ID is known in the framework
-/// Registered: the Thing was registered but it's not published yet, which means it's not operative yet for subscribers
-/// Published: the Thing was plublished and it's operative, allowing Things to subscribe an interact with it
-/// Disabled: the Thing was disabled and it's not operative, even that it's information may still be visible
+/// Status of the SAFEthing in the network
+/// Unregistered: the SAFEthing is not even registered in the network, only its ID is known in the framework
+/// Registered: the SAFEthing was registered but it's not published yet, which means it's not operative yet for subscribers
+/// Published: the SAFEthing was plublished and it's operative, allowing SAFEthings to subscribe an interact with it
+/// Disabled: the SAFEthing was disabled and it's not operative, even that it's information may still be visible
 pub enum Status {
     Unknown,
     Unregistered,
@@ -66,7 +66,7 @@ impl Topic {
     }
 }
 
-/// This is the structure which defines the attributes of a SAFE Thing
+/// This is the structure which defines the attributes of a SAFEthing
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ThingAttr {
     pub attr: String,
@@ -79,7 +79,7 @@ impl ThingAttr {
     }
 }
 
-/// Actions that can be requested to a Thing
+/// Actions that can be requested to a SAFEthing
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActionDef {
     pub name: String,
@@ -126,10 +126,49 @@ pub struct SAFEthing {
 }
 
 impl SAFEthing {
+    pub fn new(thing_id: &str, auth_uri: &str) -> ResultReturn<SAFEthing> {
+        if thing_id.len() < THING_ID_MIN_LENGTH {
+            return Err(Error::new(ErrorCode::InvalidParameters,
+                format!("SAFEthing ID must be at least {} bytes long", THING_ID_MIN_LENGTH).as_str()));
+        }
+
+        let safe_thing = SAFEthing {
+            thing_id: thing_id.to_string(),
+            safe_thing_comm: SAFEthingComm::new(thing_id, auth_uri)?,
+            subscriptions: BTreeMap::new(),
+            //notifs_cb: notifs_cb
+        };
+        println!("SAFEthing instance created with ID: {}", thing_id);
+
+        Ok(safe_thing)
+    }
+
+    /// Register and re-register a SAFEthing specifying its attributes,
+    /// events/topics and available actions
     #[allow(unused_variables)]
-    pub fn new(thing_id: &str, auth_uri: &str, notifs_cb: fn(&str, &str, &str)) -> ResultReturn<SAFEthing> {
-/*
-        let thread = thread::spawn(move || {
+    pub fn register(&mut self, attrs: Vec<ThingAttr>,
+                            topics: Vec<Topic>, actions: Vec<ActionDef>,
+                            notifs_cb: fn(&str, &str, &str)) -> ResultReturn<()> {
+        // Register it in the network
+        let _ = self.safe_thing_comm.store_thing_entity()?;
+
+        // Populate entity with attributes
+        let attrs: String = serde_json::to_string(&attrs).unwrap();
+        let _ = self.safe_thing_comm.set_attributes(attrs.as_str())?;
+
+        // Populate entity with topics
+        let topics: String = serde_json::to_string(&topics).unwrap();
+        let _ = self.safe_thing_comm.set_topics(topics.as_str())?;
+
+        // Populate entity with actions
+        let actions: String = serde_json::to_string(&actions).unwrap();
+        let _ = self.safe_thing_comm.set_actions(actions.as_str())?;
+
+        let _ = self.safe_thing_comm.set_status(ThingStatus::Registered)?;
+
+        // FIXME: we should read the subscriptions from the network as this could have been
+        // a device which was restarted. notifs_cb will be used for notifications
+        /*let thread = thread::spawn(move || {
             loop {
                 println!("Checking events...");
 //                for (thing_id, subs) in self.subscriptions.iter() {
@@ -143,54 +182,15 @@ impl SAFEthing {
 //                }
                 thread::sleep(Duration::from_secs(2));
             }
-        });
-*/
-        if thing_id.len() < THING_ID_MIN_LENGTH {
-            return Err(Error::new(ErrorCode::InvalidParameters,
-                format!("Thing ID must be at least {} bytes long", THING_ID_MIN_LENGTH).as_str()));
-        }
+        });*/
 
-        let safe_thing = SAFEthing {
-            thing_id: thing_id.to_string(),
-            safe_thing_comm: SAFEthingComm::new(thing_id, auth_uri)?,
-            subscriptions: BTreeMap::new(),
-            //notifs_cb: notifs_cb
-        };
-        println!("SAFEthing instance created with Thing ID: {}", thing_id);
-
-        Ok(safe_thing)
-    }
-
-    /// Register and re-register a SAFEthing specifying its attributes,
-    /// events/topics and available actions
-    pub fn register_thing(&mut self, attrs: Vec<ThingAttr>,
-                            topics: Vec<Topic>, actions: Vec<ActionDef>) -> ResultReturn<()> {
-
-        // Register it in the network
-        let _ = self.safe_thing_comm.store_thing_entity();
-
-        // Populate entity with attributes
-        let attrs: String = serde_json::to_string(&attrs).unwrap();
-        let _ = self.safe_thing_comm.set_attributes(attrs.as_str());
-
-        // Populate entity with topics
-        let topics: String = serde_json::to_string(&topics).unwrap();
-        let _ = self.safe_thing_comm.set_topics(topics.as_str());
-
-        // Populate entity with actions
-        let actions: String = serde_json::to_string(&actions).unwrap();
-        let _ = self.safe_thing_comm.set_actions(actions.as_str());
-
-        let _ = self.safe_thing_comm.set_status(ThingStatus::Registered);
-
-        println!("Thing registered with id: {}", self.thing_id);
+        println!("SAFEthing registered with ID: {}", self.thing_id);
         Ok(())
     }
 
-    /// Get status of a Thing
-    pub fn get_thing_status(&mut self, thing_id: &str) -> ResultReturn<Status> {
-        // Search on the network by thing_id
-        match self.safe_thing_comm.get_thing_status(thing_id) {
+    /// Get status of a SAFEthing
+    pub fn status(&mut self) -> ResultReturn<Status> {
+        match self.safe_thing_comm.get_status() {
             Ok(ThingStatus::Unknown) => Ok(Status::Unknown),
             Ok(ThingStatus::Registered) => Ok(Status::Registered),
             Ok(ThingStatus::Published) => Ok(Status::Published),
@@ -199,14 +199,7 @@ impl SAFEthing {
         }
     }
 
-    /// Get address name of a Thing
-    pub fn get_thing_addr_name(&self, thing_id: &str) -> ResultReturn<String> {
-        // Search on the network by thing_id
-        let addr_name = self.safe_thing_comm.get_thing_addr_name(thing_id)?;
-        Ok(addr_name)
-    }
-
-    /// Get list of attrbiutes of a Thing
+    /// Get list of attrbiutes of a SAFEthing
     pub fn get_thing_attrs(&self, thing_id: &str) -> ResultReturn<Vec<ThingAttr>> {
         // Search on the network by thing_id
         let attrs_str = self.safe_thing_comm.get_thing_attrs(thing_id)?;
@@ -214,7 +207,7 @@ impl SAFEthing {
         Ok(attrs)
     }
 
-    /// Get list of topics supported by a Thing
+    /// Get list of topics supported by a SAFEthing
     pub fn get_thing_topics(&self, thing_id: &str) -> ResultReturn<Vec<Topic>> {
         // Search on the network by thing_id
         let topics_str = self.safe_thing_comm.get_thing_topics(thing_id)?;
@@ -222,7 +215,7 @@ impl SAFEthing {
         Ok(topics)
     }
 
-    /// Get list of actions supported by a Thing
+    /// Get list of actions supported by a SAFEthing
     pub fn get_thing_actions(&self, thing_id: &str) -> ResultReturn<Vec<ActionDef>> {
         // Search on the network by thing_id
         let actions_str = self.safe_thing_comm.get_thing_actions(thing_id)?;
@@ -232,10 +225,10 @@ impl SAFEthing {
 
     /// Publish the thing making it available and operative in the network, allowing other SAFEthings
     /// to request actions, subscribe to topics, and receive notifications upon events.
-    pub fn publish_thing(&mut self, thing_id: &str) -> ResultReturn<()> {
+    pub fn publish(&mut self) -> ResultReturn<()> {
         // Publish it in the network
         let _ = self.safe_thing_comm.set_status(ThingStatus::Published);
-        println!("SAFEthing published with id {:?}", thing_id);
+        println!("SAFEthing published with ID: {}", self.thing_id);
         Ok(())
     }
 
@@ -267,7 +260,7 @@ impl SAFEthing {
         Ok(())
     }
 
-    /// Send an action request to a Thing and wait for response
+    /// Send an action request to a SAFEthing and wait for the response
     #[allow(unused_variables)]
     pub fn action_request(&self, thing_id: &str, action: &str, args: ActionArgs) -> ResultReturn<&str> {
         // Search on the network by thing_id
