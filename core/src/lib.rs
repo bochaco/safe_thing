@@ -4,11 +4,11 @@ extern crate serde_derive;
 mod comm;
 mod errors;
 mod safe_net;
+mod safe_net_helpers;
 
 extern crate serde_json;
 
 use std::collections::BTreeMap;
-//use std::thread;
 use comm::{SAFEthingComm, ThingStatus, ActionArgs};
 use errors::{ResultReturn, Error, ErrorCode};
 use std::fmt;
@@ -29,14 +29,14 @@ pub enum AccessType {
 }
 
 /// Status of the SAFEthing in the network
-/// Unregistered: the SAFEthing is not even registered in the network, only its ID is known in the framework
-/// Registered: the SAFEthing was registered but it's not published yet, which means it's not operative yet for subscribers
+/// NonConnected: the SAFEthing is not even Connected in the network, only its ID is known in the framework
+/// Connected: the SAFEthing was Connected but it's not published yet, which means it's not operative yet for subscribers
 /// Published: the SAFEthing was plublished and it's operative, allowing SAFEthings to subscribe an interact with it
 /// Disabled: the SAFEthing was disabled and it's not operative, even that it's information may still be visible
 pub enum Status {
     Unknown,
-    Unregistered,
-    Registered,
+    NonConnected,
+    Connected,
     Published,
     Disabled
 }
@@ -45,8 +45,8 @@ impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match *self {
             Status::Unknown => "Unknown",
-            Status::Unregistered => "Unregistered",
-            Status::Registered => "Registered",
+            Status::NonConnected => "NonConnected",
+            Status::Connected => "Connected",
             Status::Published => "Published",
             Status::Disabled => "Disabled"
         })
@@ -126,6 +126,8 @@ pub struct SAFEthing {
 }
 
 impl SAFEthing {
+    /// The thing id shall be an opaque string, and the auth URI shall not contain any
+    /// scheme/protocol (i.e. without 'safe-...:' prefix) but just the encoded authorisation
     pub fn new(thing_id: &str, auth_uri: &str) -> ResultReturn<SAFEthing> {
         if thing_id.len() < THING_ID_MIN_LENGTH {
             return Err(Error::new(ErrorCode::InvalidParameters,
@@ -154,19 +156,20 @@ impl SAFEthing {
 
         // Populate entity with attributes
         let attrs: String = serde_json::to_string(&attrs).unwrap();
-        let _ = self.safe_thing_comm.set_attributes(attrs.as_str())?;
+        self.safe_thing_comm.set_attributes(attrs.as_str())?;
 
         // Populate entity with topics
         let topics: String = serde_json::to_string(&topics).unwrap();
-        let _ = self.safe_thing_comm.set_topics(topics.as_str())?;
+        self.safe_thing_comm.set_topics(topics.as_str())?;
 
         // Populate entity with actions
         let actions: String = serde_json::to_string(&actions).unwrap();
-        let _ = self.safe_thing_comm.set_actions(actions.as_str())?;
+        self.safe_thing_comm.set_actions(actions.as_str())?;
 
-        let _ = self.safe_thing_comm.set_status(ThingStatus::Registered)?;
+        // Set SAFEthing status as Connected
+        self.safe_thing_comm.set_status(ThingStatus::Connected)?;
 
-        // FIXME: we should read the subscriptions from the network as this could have been
+        // TODO: we should read the subscriptions from the network as this could have been
         // a device which was restarted. notifs_cb will be used for notifications
         /*let thread = thread::spawn(move || {
             loop {
@@ -184,7 +187,7 @@ impl SAFEthing {
             }
         });*/
 
-        println!("SAFEthing registered with ID: {}", self.thing_id);
+        println!("SAFEthing Connected with ID: {}", self.thing_id);
         Ok(())
     }
 
@@ -192,7 +195,7 @@ impl SAFEthing {
     pub fn status(&mut self) -> ResultReturn<Status> {
         match self.safe_thing_comm.get_status() {
             Ok(ThingStatus::Unknown) => Ok(Status::Unknown),
-            Ok(ThingStatus::Registered) => Ok(Status::Registered),
+            Ok(ThingStatus::Connected) => Ok(Status::Connected),
             Ok(ThingStatus::Published) => Ok(Status::Published),
             Ok(ThingStatus::Disabled) => Ok(Status::Disabled),
             Err(err) => return Err(err)

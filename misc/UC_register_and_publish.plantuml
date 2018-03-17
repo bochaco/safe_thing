@@ -20,13 +20,13 @@ deactivate framework
 thing -> framework: Register(attributes, topics, ...)
 activate framework
 
-framework -> safenet: CreateMD( XoRName(thing_id), attributes,\nstatus = 'registered')
+framework -> safenet: CreateMD( XoRName(thing_id), attributes,\nstatus = 'Connected')
 activate safenet
 
 framework <-- safenet: Ok
 deactivate safenet
 
-thing <-- framework: Ok(status = 'registered')
+thing <-- framework: Ok(status = 'Connected')
 deactivate framework
 thing -> thing: Display solid green light\non thing's panel
 deactivate thing
@@ -42,13 +42,13 @@ activate framework
 framework -> safenet: FetchMD( XoRName(thing_id))
 activate safenet
 
-framework <-- safenet: Ok(Thing info, status = 'registered')
+framework <-- safenet: Ok(Thing info, status = 'Connected')
 deactivate safenet
 
-admin <-- framework: Ok(Thing info, status = 'registered')
+admin <-- framework: Ok(Thing info, status = 'Connected')
 deactivate framework
 
-owner <-- admin: Thing's info,\nStatus = 'registered'
+owner <-- admin: Thing's info,\nStatus = 'Connected'
 deactivate admin
 
 owner -> admin: Publish(thing_id)

@@ -4,6 +4,8 @@ pub type ResultReturn<T> = Result<T, Error>;
 
 pub enum ErrorCode {
     InvalidParameters,
+    ConnectionErr,
+    NetworkErr,
 }
 
 pub struct Error {
@@ -21,6 +23,8 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "[Error] {} - {}", match (*self).code {
             ErrorCode::InvalidParameters => "Invalid parameters",
+            ErrorCode::ConnectionErr => "Connection error",
+            ErrorCode::NetworkErr => "Network error",
         }, (*self).info)
     }
 }
