@@ -2,18 +2,18 @@
 **S**ecure **A**ccess **F**or **E**very**thing**
 
 ### Project Goals
-- Provide IoT software developers with an easy and straight forward way to integrate their IoT devices to the SAFE network without worrying about network, security and/or authentication & authorisation protocols.
-- Create a project which can be used as a knowledge base for developers trying to learn and implement software for the SAFE network.
-- Allow the SAFE network community to participate in a project which creates added value for the SAFE network, and which leads to help promoting it and to achieve mass adoption.
-- Ultimatly, **have the next-gen IoT framework and communication protocol to be designed and developed by the SAFE network community itself!**
+- Provide IoT software developers with an easy and straight forward way to integrate their IoT devices to the SAFE Network without worrying about network, security and/or authentication & authorisation protocols.
+- Create a project which can be used as a knowledge base for developers trying to learn and implement software for the SAFE Network.
+- Allow the SAFE Network community to participate in a project which creates added value for the SAFE Network, and which leads to help promoting it and to achieve mass adoption.
+- Ultimatly, **have the next-gen IoT framework and communication protocol to be designed and developed by the SAFE Network community itself!**
 
 
 ### The Library and API
 The SAFEthing library is composed of several parts but its core is just a Rust crate with a simple and well defined Rust API.
 
-Internally it contains all the mechanisms to communicate with the SAFE network thru the [safe_client_libs](https://github.com/maidsafe/safe_client_libs), abstracting the client application from all of it without the need for the application developer to even understand how the SAFE network works.
+Internally it contains all the mechanisms to communicate with the SAFE Network thru the [safe_client_libs](https://github.com/maidsafe/safe_client_libs), abstracting the client application from all of it without the need for the application developer to even understand how the SAFE Network works.
 
-In an analogous way as to how the SAFE network itself provides different programming languages bindings, there will be a SAFEthing Rust FFI interface which can be used to interact with the API from any programming language, like C/C++, but also a set of different language bindings so people can develop their SAFEthings software even with JavaScript, Python, Lua, etc.
+In an analogous way as to how the SAFE Network itself provides different programming languages bindings, there will be a SAFEthing Rust FFI interface which can be used to interact with the API from any programming language, like C/C++, but also a set of different language bindings so people can develop their SAFEthings software even with JavaScript, Python, Lua, etc.
 
 A WebService API will also be created on top of the Rust API to allow the communication with the SAFEthings network thru a REST interface. This is mainly intended to support smart home devices, and tools potentially needed to provision them.
 
@@ -128,3 +128,22 @@ pub fn main() {
 - [ ] Implementation of Javascript binding
 - [ ] Documentation of the communication protocol
 - [ ] Implementation of WebService API
+
+
+## License
+
+General Public License (GPL), version 3 ([LICENSE](LICENSE))
+
+Copyright (c) 2017-2019 Gabriel Viganotti <@bochaco>.
+
+This file is part of the SAFEthing Framework.
+
+The SAFEthing Framework is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+The SAFEthing Framework is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
