@@ -1,31 +1,27 @@
 extern crate safe_app;
 extern crate safe_core;
 extern crate ffi_utils;
-extern crate routing;
+//extern crate routing;
 
 use self::safe_app::App;
 #[cfg(feature="fake-auth")]
 use self::safe_app::test_utils::create_app;
-use self::safe_app::object_cache::{MDataPermissionsHandle,
+use self::safe_app::ffi::object_cache::{MDataPermissionsHandle,
     SignPubKeyHandle, MDataEntryActionsHandle};
 use self::safe_app::ffi::crypto::{app_pub_sign_key, sha3_hash};
-#[cfg(not(feature="fake-auth"))]
-use self::safe_core::ipc::{decode_msg, IpcMsg, IpcResp, IpcError};
 //use self::safe_app::ffi::mdata_info::{mdata_info_new_private};
 use self::safe_app::ffi::mutable_data::permissions::{mdata_permissions_new,
     mdata_permissions_insert/*, USER_ANYONE, MDataAction*/};
 use self::safe_app::ffi::mutable_data::{ENTRIES_EMPTY, mdata_put, mdata_mutate_entries};
 use self::safe_app::ffi::mutable_data::entry_actions::{mdata_entry_actions_new,
     mdata_entry_actions_insert, mdata_entry_actions_update};
-#[cfg(not(feature="fake-auth"))]
-use self::safe_core::ipc::resp::AuthGranted;
+
 use self::safe_core::ffi::MDataInfo;
 //use self::safe_core::ffi::arrays::{SymSecretKey, SymNonce};
 use self::safe_core::ffi::ipc::req::{PermissionSet};
 use self::ffi_utils::test_utils::{call_0, call_1/*, call_vec*/, call_vec_u8};
-use std::{fmt, str};
 
-//use std::ptr::null_mut;
+use std::{fmt, str};
 
 use errors::{ResultReturn, Error, ErrorCode};
 const ERR_DATA_EXISTS: i32 = -104;
@@ -53,7 +49,7 @@ impl Default for MutableData {
 #[derive(Debug)]
 pub enum ConnStatus {
     Init,
-    Disconnected,
+    //Disconnected,
     Connected,
 }
 
@@ -61,7 +57,7 @@ impl fmt::Display for ConnStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match *self {
             ConnStatus::Init => "Init",
-            ConnStatus::Disconnected => "Disconnected",
+            //ConnStatus::Disconnected => "Disconnected",
             ConnStatus::Connected => "Connected",
         })
     }
@@ -117,7 +113,9 @@ impl SAFENet {
 
         // Retrieve app's public sign key
         let app: *const App = safe_net.safe_app.as_ref().unwrap();
-        safe_net.sign_pub_key_h = unsafe { call_1(|ud, cb| app_pub_sign_key(app, ud, cb)).unwrap() };
+        safe_net.sign_pub_key_h = unsafe {
+            call_1(|ud, cb| app_pub_sign_key(app, ud, cb)).unwrap()
+        };
         Ok(safe_net)
     }
 
@@ -208,11 +206,11 @@ impl SAFENet {
 
     #[allow(dead_code)]
     pub fn new_priv_mutable_data(&self, _xor_name: [u8; 32], _type_tag: u64) -> ResultReturn<MutableData> {
-/*        let mut ctx = CallbackContext::new(self.safe_app);
-        let _ctx_ptr = &mut ctx as *mut _ as *mut c_void;
-        unsafe {
-            mdata_info_new_private(self.safe_app, &xor_name, type_tag, ctx_ptr, new_md_callback);
-        };*/
+//        let mut ctx = CallbackContext::new(self.safe_app);
+//        let _ctx_ptr = &mut ctx as *mut _ as *mut c_void;
+//        unsafe {
+//            mdata_info_new_private(self.safe_app, &xor_name, type_tag, ctx_ptr, new_md_callback);
+//        };
 
         Ok(Default::default())
     }
@@ -235,8 +233,8 @@ impl SAFENet {
         match SAFENetHelpers::mdata_get(app, &mdata.0, key) {
             Ok((v, version)) => {
                 let str: String = String::from_utf8(v).unwrap();
-                println!("Entry already exists: {} => {} ({})", key, str, version);
-                println!("Let's update it with: {}", value);
+                println!("Entry already exists: '{}' => '{}' (version {})", key, str, version);
+                println!("Let's update it with: '{}' (version {})", value, version + 1);
                 unsafe {
                     call_0(|ud, cb| {
                         mdata_entry_actions_update(app, mdata_actions_h, key.as_ptr(), key.len(),
@@ -246,8 +244,8 @@ impl SAFENet {
             },
             Err(error_code) => {
                 if error_code == ERR_NO_SUCH_ENTRY {
-                    println!("Entry doesn't exist: {}", error_code);
-                    println!("Let's insert: {} {}", key, value);
+                    println!("Entry doesn't exist");
+                    println!("Let's insert: '{}' '{}'", key, value);
                     unsafe {
                         call_0(|ud, cb| {
                             mdata_entry_actions_insert(app, mdata_actions_h, key.as_ptr(), key.len(),

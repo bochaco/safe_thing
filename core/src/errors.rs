@@ -2,12 +2,14 @@ use std::fmt;
 
 pub type ResultReturn<T> = Result<T, Error>;
 
+#[derive(Debug)]
 pub enum ErrorCode {
     InvalidParameters,
     ConnectionErr,
     NetworkErr,
 }
 
+#[derive(Debug)]
 pub struct Error {
     code: ErrorCode,
     info: String,

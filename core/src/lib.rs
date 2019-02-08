@@ -12,8 +12,12 @@ use std::collections::BTreeMap;
 use comm::{SAFEthingComm, ThingStatus, ActionArgs};
 use errors::{ResultReturn, Error, ErrorCode};
 use std::fmt;
+use std::thread;
+use std::sync::mpsc;
+use std::time::Duration;
 
 const THING_ID_MIN_LENGTH: usize = 5;
+const SUBSCRIPTIONS_CHECK_FREQ: u64 = 5;
 
 /// Group of SAFEthings that are allow to register to a topic
 /// Thing: access only to the thing's application. This is the default and lowest level of access type.
@@ -118,17 +122,42 @@ struct EventFilter {
 /// This is just a cache since it's all stored in the network.
 type Subscription = BTreeMap<String, Vec<EventFilter>>;
 
-pub struct SAFEthing {
+pub struct SAFEthing<F: 'static>
+    where F: Fn(&str, &str, &str)
+{
     pub thing_id: String,
     safe_thing_comm: SAFEthingComm,
     subscriptions: BTreeMap<String, Subscription>,
-    //notifs_cb: fn(&str, &str, &str)
+    notifs_cb: F
 }
 
-impl SAFEthing {
+impl<F: 'static> SAFEthing<F>
+    where F: Fn(&str, &str, &str) + std::marker::Send + std::marker::Sync
+{
+    /// this should go probably as a helper function
+    #[allow(dead_code)]
+    pub fn check_subscriptions(&self) -> ResultReturn<()>
+    {
+        for (thing_id, subs) in self.subscriptions.iter() {
+            for (topic, _filter) in subs.iter() {
+                let events = self.safe_thing_comm.get_thing_topic_events(thing_id, topic)?;
+                let mut events_vec: Vec<String> = match serde_json::from_str(&events) {
+                    Ok(vec) => vec,
+                    Err(_) => vec![]
+                };
+                for event in events_vec.iter() {
+                    println!("Event occurred for topic: {}, event: {}", topic, event);
+                    (self.notifs_cb)(thing_id.as_str(), topic.as_str(), event.as_str());
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// The thing id shall be an opaque string, and the auth URI shall not contain any
     /// scheme/protocol (i.e. without 'safe-...:' prefix) but just the encoded authorisation
-    pub fn new(thing_id: &str, auth_uri: &str) -> ResultReturn<SAFEthing> {
+    pub fn new(thing_id: &str, auth_uri: &str,
+                notifs_cb: F) -> ResultReturn<SAFEthing<F>> {
         if thing_id.len() < THING_ID_MIN_LENGTH {
             return Err(Error::new(ErrorCode::InvalidParameters,
                 format!("SAFEthing ID must be at least {} bytes long", THING_ID_MIN_LENGTH).as_str()));
@@ -138,9 +167,47 @@ impl SAFEthing {
             thing_id: thing_id.to_string(),
             safe_thing_comm: SAFEthingComm::new(thing_id, auth_uri)?,
             subscriptions: BTreeMap::new(),
-            //notifs_cb: notifs_cb
+            notifs_cb: notifs_cb
         };
         println!("SAFEthing instance created with ID: {}", thing_id);
+
+        // TODO: we should read the subscriptions from the network as this could have been
+        // a device which was restarted. notifs_cb will be used for notifications
+        let (tx, rx) = mpsc::channel();
+        let _thread = thread::spawn(move || {
+
+            /*for (thing_id, subs) in safe_thing.subscriptions.iter() {
+                for (topic, _filter) in subs.iter() {
+                    println!("TOPIC and THING_ID: {} {}", thing_id, topic);
+                }
+            }*/
+            let safe_thing_comm = SAFEthingComm::new("thing_id", "auth_uri").unwrap();
+            let events = safe_thing_comm.get_thing_topic_events("thing_id", "topic");
+            let vals = vec![
+                String::from("hi 1"),
+                String::from("from 2"),
+                String::from("the 3"),
+                String::from("thread 4"),
+            ];
+
+            for val in vals {
+                tx.send(val).unwrap();
+                thread::sleep(Duration::from_secs(SUBSCRIPTIONS_CHECK_FREQ));
+            }
+
+            /*loop {
+                println!("Checking events...");
+                thread::sleep(Duration::from_secs(SUBSCRIPTIONS_CHECK_FREQ));
+                let val = String::from("hi from thread");
+                tx.send(val).unwrap();
+            }*/
+        });
+
+        thread::spawn(move || {
+            for received in rx {
+                println!("Got: {}", received);
+            }
+        });
 
         Ok(safe_thing)
     }
@@ -148,11 +215,11 @@ impl SAFEthing {
     /// Register and re-register a SAFEthing specifying its attributes,
     /// events/topics and available actions
     #[allow(unused_variables)]
-    pub fn register(&mut self, attrs: Vec<ThingAttr>,
-                            topics: Vec<Topic>, actions: Vec<ActionDef>,
-                            notifs_cb: fn(&str, &str, &str)) -> ResultReturn<()> {
+    pub fn register(&mut self, attrs: &Vec<ThingAttr>,
+                    topics: &Vec<Topic>, actions: &Vec<ActionDef>) -> ResultReturn<()> {
         // Register it in the network
-        let _ = self.safe_thing_comm.store_thing_entity()?;
+        let thing_xorname: String = self.safe_thing_comm.store_thing_entity()?;
+        println!("SAFEthing entity XoRname: {}", thing_xorname);
 
         // Populate entity with attributes
         let attrs: String = serde_json::to_string(&attrs).unwrap();
@@ -169,29 +236,11 @@ impl SAFEthing {
         // Set SAFEthing status as Connected
         self.safe_thing_comm.set_status(ThingStatus::Connected)?;
 
-        // TODO: we should read the subscriptions from the network as this could have been
-        // a device which was restarted. notifs_cb will be used for notifications
-        /*let thread = thread::spawn(move || {
-            loop {
-                println!("Checking events...");
-//                for (thing_id, subs) in self.subscriptions.iter() {
-//                    for (topic, filter) in subs.iter() {
-                        //self.safe_thing_comm.get_topic_events(topic).map(|events| {
-                            //println!("Event occurred for topic: {}, data: {}", topic, events);
-                            //notifs_cb(thing.as_str(), topic.as_str(), events.as_str());
-                            notifs_cb("thing", "printRequested", "events");
-                        //});
-//                    }
-//                }
-                thread::sleep(Duration::from_secs(2));
-            }
-        });*/
-
         println!("SAFEthing Connected with ID: {}", self.thing_id);
         Ok(())
     }
 
-    /// Get status of a SAFEthing
+    /// Get status of this SAFEthing
     pub fn status(&mut self) -> ResultReturn<Status> {
         match self.safe_thing_comm.get_status() {
             Ok(ThingStatus::Unknown) => Ok(Status::Unknown),
@@ -203,24 +252,24 @@ impl SAFEthing {
     }
 
     /// Get list of attrbiutes of a SAFEthing
+    /// Search on the network by thing_id
     pub fn get_thing_attrs(&self, thing_id: &str) -> ResultReturn<Vec<ThingAttr>> {
-        // Search on the network by thing_id
         let attrs_str = self.safe_thing_comm.get_thing_attrs(thing_id)?;
         let attrs: Vec<ThingAttr> = serde_json::from_str(&attrs_str).unwrap();
         Ok(attrs)
     }
 
     /// Get list of topics supported by a SAFEthing
+    /// Search on the network by thing_id
     pub fn get_thing_topics(&self, thing_id: &str) -> ResultReturn<Vec<Topic>> {
-        // Search on the network by thing_id
         let topics_str = self.safe_thing_comm.get_thing_topics(thing_id)?;
         let topics: Vec<Topic> = serde_json::from_str(&topics_str).unwrap();
         Ok(topics)
     }
 
     /// Get list of actions supported by a SAFEthing
+    /// Search on the network by thing_id
     pub fn get_thing_actions(&self, thing_id: &str) -> ResultReturn<Vec<ActionDef>> {
-        // Search on the network by thing_id
         let actions_str = self.safe_thing_comm.get_thing_actions(thing_id)?;
         let actions: Vec<ActionDef> = serde_json::from_str(&actions_str).unwrap();
         Ok(actions)
@@ -229,7 +278,6 @@ impl SAFEthing {
     /// Publish the thing making it available and operative in the network, allowing other SAFEthings
     /// to request actions, subscribe to topics, and receive notifications upon events.
     pub fn publish(&mut self) -> ResultReturn<()> {
-        // Publish it in the network
         let _ = self.safe_thing_comm.set_status(ThingStatus::Published);
         println!("SAFEthing published with ID: {}", self.thing_id);
         Ok(())
@@ -239,15 +287,18 @@ impl SAFEthing {
     /// Eventually this can support filters
     pub fn subscribe(&mut self, thing_id: &str, topic: &str/*, filter*/) -> ResultReturn<()>
     {
-        self.subscriptions.entry(String::from(thing_id)).or_insert(BTreeMap::new());
+        // TODO: check if thing is 'Published' before subscribing, and
+        // also check if it supports the topic
 
+        // We keep track of the suscriptions list in memory first
+        self.subscriptions.entry(String::from(thing_id)).or_insert(BTreeMap::new());
         let thing = String::from(thing_id);
         self.subscriptions.get_mut(&thing).map(|subs| {
             let filters: Vec<EventFilter> = vec![];
             subs.insert(String::from(topic), filters);
         });
 
-        // Store subscription on the network
+        // But also store subscriptions list on the network
         let subscriptions_str: String = serde_json::to_string(&self.subscriptions).unwrap();
         self.safe_thing_comm.set_subscriptions(subscriptions_str.as_str())?;
 
@@ -259,14 +310,20 @@ impl SAFEthing {
     pub fn notify(&mut self, topic: &str, data: &str) -> ResultReturn<()>
     {
         println!("Event occurred for topic: {}, data: {}", topic, data);
-        self.safe_thing_comm.set_topic_events(topic, data)?;
+        let events: String = self.safe_thing_comm.get_topic_events(topic)?;
+        let mut events_vec: Vec<String> = match serde_json::from_str(&events) {
+            Ok(vec) => vec,
+            Err(_) => vec![]
+        };
+        events_vec.push(data.to_string());
+        let events_str: String = serde_json::to_string(&events_vec).unwrap();
+        self.safe_thing_comm.set_topic_events(topic, events_str.as_str())?;
         Ok(())
     }
 
     /// Send an action request to a SAFEthing and wait for the response
-    #[allow(unused_variables)]
-    pub fn action_request(&self, thing_id: &str, action: &str, args: ActionArgs) -> ResultReturn<&str> {
-        // Search on the network by thing_id
+    /// Search on the network by thing_id
+    pub fn action_request(&self, _thing_id: &str, _action: &str, _args: ActionArgs) -> ResultReturn<&str> {
         //self.safe_thing_comm.send_action_request(thing_id, action, args).ok_or("Action request failure".to_owned())
         Ok("")
     }

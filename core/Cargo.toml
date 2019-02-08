@@ -9,11 +9,11 @@ use-mock-routing = ["safe_app/use-mock-routing"]
 fake-auth = ["safe_app/testing"]
 
 [dependencies]
-safe_app = { git = "https://github.com/maidsafe/safe_client_libs.git", rev = "dbb01377" }
-safe_core = { git = "https://github.com/maidsafe/safe_client_libs.git", rev = "dbb01377" }
-ffi_utils = { git = "https://github.com/maidsafe/safe_client_libs.git", rev = "dbb01377" }
-routing = "~0.35.0"
-serde = "0.9"
-serde_derive = "0.9"
-serde_json = "0.9"
-rustc-serialize = "0.3"
+safe_app = "~0.9.0"
+safe_core = "~0.32.0"
+ffi_utils = "~0.11.0"
+#routing = "~0.37.0"
+serde = "~1.0.82"
+serde_derive = "~1.0.82"
+serde_json = "~1.0.33"
+#rustc-serialize = "0.3"

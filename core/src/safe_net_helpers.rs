@@ -10,6 +10,10 @@ use self::ffi_utils::test_utils::{send_via_user_data, sender_as_user_data};
 use std::{slice};
 use std::sync::mpsc;
 use std::os::raw::{/*c_char, */c_void};
+#[cfg(not(feature="fake-auth"))]
+use self::safe_core::ipc::resp::AuthGranted;
+#[cfg(not(feature="fake-auth"))]
+use self::safe_core::ipc::{decode_msg, IpcMsg, IpcResp, IpcError};
 
 #[cfg(not(feature = "fake-auth"))]
 pub fn decode_ipc_msg(ipc_msg: &str) -> Result<AuthGranted, IpcError> {
