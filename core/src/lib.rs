@@ -199,7 +199,7 @@ impl<F: 'static> SAFEthing<F>
                 }
             }*/
             let safe_thing_comm = SAFEthingComm::new("thing_id", "auth_uri").unwrap();
-            let events = safe_thing_comm.get_thing_topic_events("thing_id", "topic");
+            let _events = safe_thing_comm.get_thing_topic_events("thing_id", "topic");
             let vals = vec![
                 String::from("hi 1"),
                 String::from("from 2"),

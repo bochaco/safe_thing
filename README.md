@@ -5,17 +5,25 @@
 - Provide IoT software developers with an easy and straight forward way to integrate their IoT devices to the SAFE Network without worrying about network, security and/or authentication & authorisation protocols.
 - Create a project which can be used as a knowledge base for developers trying to learn and implement software for the SAFE Network.
 - Allow the SAFE Network community to participate in a project which creates added value for the SAFE Network, and which leads to help promoting it and to achieve mass adoption.
-- Ultimatly, **have the next-gen IoT framework and communication protocol to be designed and developed by the SAFE Network community itself!**
+- Ultimately, **have the next-gen IoT framework and communication protocol to be designed and developed by the SAFE Network community itself!**
 
+### Run example SAFEthing application
+
+This project is in its very early stage, at the moment there is a tiny example application (`/core/examples/printer.rs`) which showcases how the SAFEthing API is intended to be used. You can run this example app with the following commands (please make sure you have rustc v1.31.0 or later):
+```
+$ git clone https://github.com/bochaco/safe_thing.git
+$ cd ./safe_thing/core
+$ cargo run --example printer --features "fake-auth use-mock-routing"
+```
 
 ### The Library and API
 The SAFEthing library is composed of several parts but its core is just a Rust crate with a simple and well defined Rust API.
 
-Internally it contains all the mechanisms to communicate with the SAFE Network thru the [safe_client_libs](https://github.com/maidsafe/safe_client_libs), abstracting the client application from all of it without the need for the application developer to even understand how the SAFE Network works.
+Internally it contains all the mechanisms to communicate with the SAFE Network through the [safe_client_libs](https://github.com/maidsafe/safe_client_libs), abstracting the client application from all of it without the need for the application developer to even understand how the SAFE Network works.
 
-In an analogous way as to how the SAFE Network itself provides different programming languages bindings, there will be a SAFEthing Rust FFI interface which can be used to interact with the API from any programming language, like C/C++, but also a set of different language bindings so people can develop their SAFEthings software even with JavaScript, Python, Lua, etc.
+In an analogous way as to how the SAFE Network itself provides different programming languages bindings, there will be a SAFEthing Rust FFI interface which can be used to interact with the API from any programming language, like C/C++, but also a set of different language bindings so people can develop their SAFEthings software even with JavaScript, Python, Lua, Go, etc.
 
-A WebService API will also be created on top of the Rust API to allow the communication with the SAFEthings network thru a REST interface. This is mainly intended to support smart home devices, and tools potentially needed to provision them.
+A WebService API will also be created on top of the Rust API to allow the communication with the SAFEthings network through a REST interface. This is mainly intended to support smart home devices, and tools potentially needed to provision them.
 
 ![SAFEthing Library Stack](misc/SAFEthing_Stack.png)
 
@@ -23,14 +31,14 @@ A WebService API will also be created on top of the Rust API to allow the commun
 When a SAFEthing registers to the network it provides a set of information which describes its behaviour, functionality and/or service it exposes.
 
 #### Attributes
-Attributes are exposed to provide information about the device/thing to other things that connect to the network. They can also be used by humans to identify the device and/or its functionalities when connecting to it thru a console/portal.
+Attributes are exposed to provide information about the device/thing to other things that connect to the network. They can also be used by humans to identify the device and/or its functionalities when connecting to it through a console/portal.
 
-An attribute can be either static or dynamic. Some examples of static attributes are the firmware version, device name and model, and their values do not depend or change according to the thing's functioning or state.
+An attribute can be either static or dynamic. Some examples of static attributes are the firmware version, device name and model, and their values do not depend or change according to the thing's functioning or state. Note these attributes could still be changed/modified by the user, but in the sense that their values are not tied to the device's state.
 
-On the other hand, some attributes could contain dynamic values which are updated by the SAFEthing, e.g. a temperature sensor could update a dynamic attribute with the current reading, or a SAFEthing with a more complex functionality could expose an attribute which described its current state.
+On the other hand, some attributes could contain dynamic values which are updated by the SAFEthing, e.g. a temperature sensor could update a dynamic attribute with the current reading, or a SAFEthing with a more complex functionality could expose an attribute which describes its current state.
 
 #### Topics
-A SAFEthing can expose a set of topics that other SAFEthings can subcribe to in order to receive notifications upon events.
+A SAFEthing can expose a set of topics that other SAFEthings can subscribe to in order to receive notifications upon events.
 
 Different events result in different type of notifications, a topic can describe a certain type of events, depending on how the SAFEthing is designed to expose them.
 
@@ -45,10 +53,10 @@ Another way to interact with a SAFEthing is by requesting an action. The set of 
 
 Each action is exposed with a name, a set of input parameters it expects and/or supports, and the definition of its output.
 
-The execution of an action is asynchronous. When an action is requested to a SAFEthing, it is added to its actions requests queue. The order and/or priority of execution of each of the actions is application specific, although the framework will provide some utilities to retrieve them in the order it was pre-defined for the SAFEthing.
+The execution of an action is asynchronous. When an action is requested to a SAFEthing, it is added to its actions requests queue. The order and/or priority of execution of each of the actions is application specific, although the framework will provide some utilities to retrieve them in the order it was predefined for the SAFEthing.
 
 #### Access Type
-SAFEthing's Attributes, Topics, and Actions, are associated to an Access Type. The Access Type defines the set of SAFEthings that are allow to access the exposed functionality and information.
+SAFEthing's Attributes, Topics, and Actions, are associated to an Access Type. The Access Type defines the set of SAFEthings that are allowed to access the exposed functionality and information.
 
 As an example, the data you send to a SAFEthing printer should be encrypted and available to access by the sender and the printer devices only. Or if you have a set of devices at home that interact among them, you will want that only your devices can see each other's information and functionalities but no one else.
 
@@ -121,8 +129,9 @@ pub fn main() {
 
 ### Project Development Roadmap
 
-- [ ] Cross-compilation tools for MIPS
-- [ ] Cross-compilation tools for ARM
+- [ ] Cross-compilation tools/doc for MIPS
+- [ ] Cross-compilation tools/doc for ARM
+- [ ] Creation of a showcasing app using the test SAFE Network
 - [ ] Creation of test suite for API
 - [ ] Implementation of FFI interface
 - [ ] Implementation of Javascript binding
