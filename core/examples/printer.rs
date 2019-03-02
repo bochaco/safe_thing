@@ -17,16 +17,23 @@
 
 extern crate safe_thing;
 
-use safe_thing::{SAFEthing, ThingAttr, Topic, ActionDef, AccessType};
-use std::thread;
-use std::time::Duration;
+use safe_thing::{AccessType, ActionDef, SAFEthing, ThingAttr, Topic};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn subscriptions_notif(thing_id: &str, topic: &str, data: &str) {
-    println!("Printer #1: Notification received for thing_id: {}, topic: {}, data: {}", thing_id, topic, data)
+    println!(
+        "Printer #1: Notification received from thing_id: {}, topic: {}, data: {}",
+        thing_id, topic, data
+    )
 }
 
 pub fn main() {
-    let id = "printer-serial-number-01010101";
+    // let's create a random SAFEthing id for tetign purposes
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    let id = format!("printer-serial-number-{:?}", since_the_epoch);
 
     // for mock
     let auth_uri = "bAEAAAABGXJVR6AAAAAAAAAAAAAQAAAAAAAAAAAC5EQI4XKHIVKRYNULVZALV26XFTCUMA53ABDZEVIUQPRF6OZWVEEQAAAAAAAAAAAAAVA7KSQEG6CORP7TXB3NTFO5YT23HQQ6TRENT3D5V27ZLA5GD2AQAAAAAAAAAAABRRCGSRFZ3OYPAEB2T4IY6FRIZAIP3A3L3TEPCYHYJVY5OKSJ6WFAAAAAAAAAAAAGAU3SZXJF5WYG4IRXMKQ2GALCEB5QLBL7YFGNUSEFK7JOREI6LBAYYRDJIS45XMHQCA5J6EMPCYUMQEH5QNV5ZSHRMD4E24OXFJE7LCIAAAAAAAAAAABFJE77ZSFAMLDDJT7WV25LIPK54L5HYSI2IFFSDAQUWLELNPA7VWIAAAAAAAAAAADYAAKQ3MRXOOF2JFBVGC3X3U2WOULFDD5HADEVZG2SAAA7R4CJZSAAAAAAAAAAAAAAAAAAAAAAAAACOFVBXHPHW24CPVQRIK22GNZTDWPXCCWSCLHJXUL42K4ILQTFFUGMDUAAAAAAAAAAYAAAAAAAAAAAKXVATQLDZOEVOGPQJQM7456E5FKHQKPBZRSOU2UBAAAAAAAAAAAAHAAAAAAAAAAAF64DVMJWGSY6Z5FM5UJYCEKBSMDFQ62WWYDUZGGCUGS3PWLU6J7FJLAVYG62XVKMDUAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAACQAAAAAAAAAABPWI33DOVWWK3TUOOC4QT7NYZQT4SQJRSSGOJGLGRSZLTEBF5HG5TBBW6RTET422Q7MNGB2AAAAAAAAAAASAAAAAAAAAAAAWOIVVABZOJETOB372WNSOWUJ5FHAYWH3SUYFHQENEZ4NQQIFEEZBQAAAAAAAAAAA3EEMVKL5EQUISMN7H3VHSVMF76IP7QN3UNIRHRYAAEAAAAAAAAAAAAIAAAAAC";
@@ -42,7 +49,7 @@ pub fn main() {
         ThingAttr::new("ink-level", "%"),
         ThingAttr::new("service-price", "1"),
         ThingAttr::new("payment-window", "60000"),
-        ThingAttr::new("wallet", "1KbCJfktc1JaKAwRtb42G8iNyhhh9zXRi4")
+        ThingAttr::new("wallet", "1KbCJfktc1JaKAwRtb42G8iNyhhh9zXRi4"),
     ];
     let topics = vec![
         Topic::new("printRequested", AccessType::All),
@@ -60,48 +67,63 @@ pub fn main() {
         ActionDef::new("orderInk", AccessType::Owner, vec![]),
     ];
 
-    let mut safe_thing = match SAFEthing::new(id, auth_uri, subscriptions_notif) {
-        Ok(s) => s,
-        Err(e) => panic!("{}", e)
-    };
+    let mut safe_thing = SAFEthing::new(&id, auth_uri, subscriptions_notif).unwrap();
 
-    match safe_thing.register(&attributes, &topics, &actions) {
-       Ok(()) => println!("\nPrinter registered on the network"),
-       Err(e) => println!("We got a problem!: {}", e)
-   };
+    safe_thing
+        .register(&attributes, &topics, &actions)
+        .map(|()| println!("\nPrinter registered on the network"))
+        .unwrap();
 
-/*
-    match safe_thing.status() {
-        Ok(status) => println!("\nCurrent printer status: {}", status),
-        Err(e) => println!("We got a problem!: {}", e)
-    };
+    safe_thing
+        .status()
+        .map(|status| println!("\nCurrent printer status: {}", status))
+        .unwrap();
 
-    match safe_thing.get_thing_attrs(id) {
-        Ok(attrs) => println!("\nAttributes: {:?}", attrs),
-        Err(e) => println!("We got a problem!: {}", e)
-    }
+    safe_thing
+        .get_thing_attrs(&id)
+        .map(|attrs| println!("\nAttributes: {:?}", attrs))
+        .unwrap();
 
-    match safe_thing.get_thing_topics(id) {
-        Ok(topics) => println!("\nTopics: {:?}", topics),
-        Err(e) => println!("We got a problem!: {}", e)
-    }
+    safe_thing
+        .get_thing_topics(&id)
+        .map(|topics| println!("\nTopics: {:?}", topics))
+        .unwrap();
 
-    match safe_thing.get_thing_actions(id) {
-        Ok(actions) => println!("\nActions: {:?}", actions),
-        Err(e) => println!("We got a problem!: {}", e)
-    }
-*/
-    let _ = safe_thing.publish();
+    safe_thing
+        .get_thing_actions(&id)
+        .map(|actions| println!("\nActions: {:?}", actions))
+        .unwrap();
 
-    match safe_thing.status() {
-        Ok(status) => println!("\nCurrent status: {}", status),
-        Err(e) => println!("We got a problem!: {}", e)
-    }
+    safe_thing.publish().expect("Failed to publish SAFEthing");
 
-    println!("WAIT");
-    thread::sleep(Duration::from_secs(10));
+    safe_thing
+        .status()
+        .map(|status| println!("\nCurrent status: {}", status))
+        .unwrap();
+
+    // for testing as it probably doesn't make sense
+    // to subscribe to its own events
+    safe_thing
+        .subscribe(&id, "printRequested")
+        .expect("Failed to subscribe to a topic");
+
+    let res = safe_thing
+        .action_request(&id, "print", vec!["arg1".to_string(), "arg2".to_string()])
+        .unwrap();
+    println!("Response received for action request: {}", res);
+
     println!("SENDING NOTIFICATION");
     let _ = safe_thing.notify("printRequested", "print job started");
     println!("NOTIFICATION SENT");
-    thread::sleep(Duration::from_secs(15));
+
+    safe_thing
+        .check_subscriptions()
+        .expect("Failed to check subscriptions");
+
+    // safe_thing.simulate_net_disconnect();
+
+    safe_thing
+        .status()
+        .map(|status| println!("\nCurrent status: {}", status))
+        .unwrap();
 }

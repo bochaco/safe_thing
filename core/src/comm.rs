@@ -17,11 +17,11 @@
 
 extern crate safe_core;
 
-use errors::{ResultReturn, Error, ErrorCode};
+use errors::{Error, ErrorCode, ResultReturn};
 
-// Functions to access the SAFE network
-use safe_net::{SAFENet, MutableData};
-use self::safe_core::ffi::arrays::{XorNameArray};
+// Functions to access the SAFE Network
+use self::safe_core::ffi::arrays::XorNameArray;
+use safe_net::{MutableData, SAFENet};
 
 const SAFE_THING_TYPE_TAG: u64 = 27417;
 
@@ -41,9 +41,10 @@ pub enum ThingStatus {
     Unknown,
     Connected,
     Published,
-    Disabled
+    Disabled,
 }
 
+// TODO: change to Vec<&'static str>
 pub type ActionArgs = Vec<String>; // the values are opaque for the framework
 
 pub struct SAFEthingComm {
@@ -59,19 +60,25 @@ impl SAFEthingComm {
         let safe_thing_comm = SAFEthingComm {
             thing_id: String::from(thing_id),
             /// TODO: pass a callback function for disconnection notif to reconnect
-            safe_net: SAFENet::connect(thing_id, auth_uri)?, // Connect to the SAFE network using the auth URI
+            safe_net: SAFENet::connect(thing_id, auth_uri)?, // Connect to the SAFE Network using the auth URI
             thing_mdata: Default::default(),
             xor_name: Default::default(),
         };
 
-        println!("SAFE Network connection status for thing '{}': {}", thing_id, safe_thing_comm.safe_net.get_conn_status());
+        println!(
+            "SAFE Network connection status for thing '{}': {}",
+            thing_id,
+            safe_thing_comm.safe_net.get_conn_status()
+        );
 
         Ok(safe_thing_comm)
     }
 
     pub fn store_thing_entity(&mut self) -> ResultReturn<String> {
         let xor_name = self.safe_net.gen_xor_name(self.thing_id.as_str());
-        self.thing_mdata = self.safe_net.new_pub_mutable_data(xor_name, SAFE_THING_TYPE_TAG)?;
+        self.thing_mdata = self
+            .safe_net
+            .new_pub_mutable_data(xor_name, SAFE_THING_TYPE_TAG)?;
         self.xor_name = xor_name;
         self.addr_name()
     }
@@ -92,16 +99,26 @@ impl SAFEthingComm {
             ThingStatus::Connected => status_str = SAFE_THING_ENTRY_V_STATUS_CONNECTED,
             ThingStatus::Published => status_str = SAFE_THING_ENTRY_V_STATUS_PUBLISHED,
             ThingStatus::Disabled => status_str = SAFE_THING_ENTRY_V_STATUS_DISABLED,
-            _ => return Err(Error::new(ErrorCode::InvalidParameters,
-                                        format!("Status param is invalid: {:?}", status).as_str()))
+            _ => {
+                return Err(Error::new(
+                    ErrorCode::InvalidParameters,
+                    format!("Status param is invalid: {:?}", status).as_str(),
+                ))
+            }
         }
-        self.safe_net.mutable_data_set_value(&self.thing_mdata, SAFE_THING_ENTRY_K_STATUS, status_str)?;
+        self.safe_net.mutable_data_set_value(
+            &self.thing_mdata,
+            SAFE_THING_ENTRY_K_STATUS,
+            status_str,
+        )?;
         Ok(())
     }
 
     pub fn get_status(&self) -> ResultReturn<ThingStatus> {
         let mut status = ThingStatus::Unknown;
-        let status_str = self.safe_net.mutable_data_get_value(&self.thing_mdata, SAFE_THING_ENTRY_K_STATUS)?;
+        let status_str = self
+            .safe_net
+            .mutable_data_get_value(&self.thing_mdata, SAFE_THING_ENTRY_K_STATUS)?;
         if status_str == SAFE_THING_ENTRY_V_STATUS_CONNECTED {
             status = ThingStatus::Connected;
         } else if status_str == SAFE_THING_ENTRY_V_STATUS_PUBLISHED {
@@ -113,66 +130,90 @@ impl SAFEthingComm {
     }
 
     pub fn set_attributes(&self, attrs: &str) -> ResultReturn<()> {
-        self.safe_net.mutable_data_set_value(&self.thing_mdata, SAFE_THING_ENTRY_K_ATTRS, attrs)?;
+        self.safe_net
+            .mutable_data_set_value(&self.thing_mdata, SAFE_THING_ENTRY_K_ATTRS, attrs)?;
         Ok(())
     }
 
     // Private helper
     fn get_mdata(&self, thing_id: &str) -> ResultReturn<MutableData> {
         let xor_name = self.safe_net.gen_xor_name(thing_id);
-        self.safe_net.get_pub_mutable_data(xor_name, SAFE_THING_TYPE_TAG)
+        self.safe_net
+            .get_pub_mutable_data(xor_name, SAFE_THING_TYPE_TAG)
     }
 
     pub fn get_thing_attrs(&self, thing_id: &str) -> ResultReturn<String> {
         let thing_mdata = self.get_mdata(thing_id)?;
-        self.safe_net.mutable_data_get_value(&thing_mdata, SAFE_THING_ENTRY_K_ATTRS)
+        self.safe_net
+            .mutable_data_get_value(&thing_mdata, SAFE_THING_ENTRY_K_ATTRS)
     }
 
     pub fn set_topics(&self, topics: &str) -> ResultReturn<()> {
-        self.safe_net.mutable_data_set_value(&self.thing_mdata, SAFE_THING_ENTRY_K_TOPICS, topics)?;
+        self.safe_net.mutable_data_set_value(
+            &self.thing_mdata,
+            SAFE_THING_ENTRY_K_TOPICS,
+            topics,
+        )?;
         Ok(())
     }
 
     pub fn get_thing_topics(&self, thing_id: &str) -> ResultReturn<String> {
         let thing_mdata = self.get_mdata(thing_id)?;
-        self.safe_net.mutable_data_get_value(&thing_mdata, SAFE_THING_ENTRY_K_TOPICS)
+        self.safe_net
+            .mutable_data_get_value(&thing_mdata, SAFE_THING_ENTRY_K_TOPICS)
     }
 
     pub fn set_actions(&self, actions: &str) -> ResultReturn<()> {
-        self.safe_net.mutable_data_set_value(&self.thing_mdata, SAFE_THING_ENTRY_K_ACTIONS, actions)?;
+        self.safe_net.mutable_data_set_value(
+            &self.thing_mdata,
+            SAFE_THING_ENTRY_K_ACTIONS,
+            actions,
+        )?;
         Ok(())
     }
 
     pub fn get_thing_actions(&self, thing_id: &str) -> ResultReturn<String> {
         let thing_mdata = self.get_mdata(thing_id)?;
-        self.safe_net.mutable_data_get_value(&thing_mdata, SAFE_THING_ENTRY_K_ACTIONS)
+        self.safe_net
+            .mutable_data_get_value(&thing_mdata, SAFE_THING_ENTRY_K_ACTIONS)
     }
 
     pub fn set_subscriptions(&self, subscriptions: &str) -> ResultReturn<()> {
-        self.safe_net.mutable_data_set_value(&self.thing_mdata, SAFE_THING_ENTRY_K_SUBSCRIPTIONS, subscriptions)?;
+        self.safe_net.mutable_data_set_value(
+            &self.thing_mdata,
+            SAFE_THING_ENTRY_K_SUBSCRIPTIONS,
+            subscriptions,
+        )?;
         Ok(())
     }
 
     #[allow(dead_code)]
     pub fn get_subscriptions(&self) -> ResultReturn<(String)> {
-        match self.safe_net.mutable_data_get_value(&self.thing_mdata, SAFE_THING_ENTRY_K_SUBSCRIPTIONS) {
+        match self
+            .safe_net
+            .mutable_data_get_value(&self.thing_mdata, SAFE_THING_ENTRY_K_SUBSCRIPTIONS)
+        {
             Ok(str) => Ok(str),
-            Err(err) => Ok(String::from(""))
+            Err(err) => Ok(String::from("")),
         }
     }
 
     pub fn set_topic_events(&self, topic: &str, events: &str) -> ResultReturn<()> {
         let topic_entry_key = SAFE_THING_ENTRY_K_EVENTS.to_owned() + topic;
-        self.safe_net.mutable_data_set_value(&self.thing_mdata, &topic_entry_key, events)?;
+        self.safe_net
+            .mutable_data_set_value(&self.thing_mdata, &topic_entry_key, events)?;
         Ok(())
     }
 
     #[allow(dead_code)]
     pub fn get_topic_events(&self, topic: &str) -> ResultReturn<(String)> {
         let topic_entry_key = SAFE_THING_ENTRY_K_EVENTS.to_owned() + topic;
-        match self.safe_net.mutable_data_get_value(&self.thing_mdata, &topic_entry_key) {
+        match self
+            .safe_net
+            .mutable_data_get_value(&self.thing_mdata, &topic_entry_key)
+        {
             Ok(str) => Ok(str),
-            Err(err) => Ok(String::from(""))
+            Err(err) => Ok(String::from("")),
         }
     }
 
@@ -180,22 +221,33 @@ impl SAFEthingComm {
     pub fn get_thing_topic_events(&self, thing_id: &str, topic: &str) -> ResultReturn<(String)> {
         let topic_entry_key = SAFE_THING_ENTRY_K_EVENTS.to_owned() + topic;
         let thing_mdata = self.get_mdata(thing_id)?;
-        match self.safe_net.mutable_data_get_value(&thing_mdata, &topic_entry_key) {
+        match self
+            .safe_net
+            .mutable_data_get_value(&thing_mdata, &topic_entry_key)
+        {
             Ok(str) => Ok(str),
-            Err(err) => Ok(String::from(""))
+            Err(err) => Ok(String::from("")),
         }
     }
 
     #[allow(dead_code)]
-    pub fn send_action_request(&self, thing_id: &str, action: &str, args: ActionArgs) -> ResultReturn<String> {
+    pub fn send_action_request(
+        &self,
+        thing_id: &str,
+        action: &str,
+        args: ActionArgs,
+    ) -> ResultReturn<String> {
         // TODO: send it thru the network
-        Ok(String::from("response"))
+        Ok(String::from("action request queued"))
+    }
+
+    pub fn sim_net_disconnect(&mut self) {
+        self.safe_net.sim_net_disconnect();
     }
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_works() {
-    }
+    fn it_works() {}
 }
