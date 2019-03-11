@@ -19,6 +19,11 @@
 extern crate serde_derive;
 extern crate serde_json;
 
+extern crate env_logger;
+extern crate log;
+
+use log::{debug, info, trace};
+
 mod comm;
 mod errors;
 mod safe_net;
@@ -180,6 +185,7 @@ where
         notifs_cb: &'static F,
         action_req_cb: &'static G,
     ) -> ResultReturn<SAFEthing<F, G>> {
+        env_logger::init();
         if thing_id.len() < THING_ID_MIN_LENGTH {
             return Err(Error::new(
                 ErrorCode::InvalidParameters,
@@ -200,7 +206,7 @@ where
             action_req_cb: action_req_cb,
         };
 
-        println!("SAFEthing instance created with ID: {}", thing_id);
+        info!("SAFEthing instance created with ID: {}", thing_id);
         Ok(safe_thing)
     }
 
@@ -214,7 +220,7 @@ where
     ) -> ResultReturn<()> {
         // Register it in the network
         let thing_xorname: String = self.safe_thing_comm.store_thing_entity()?;
-        println!("SAFEthing entity XoRname: {}", thing_xorname);
+        debug!("SAFEthing entity XoRname: {}", thing_xorname);
 
         // Populate entity with attributes
         let attrs: String = serde_json::to_string(&attrs).unwrap();
@@ -250,12 +256,13 @@ where
         let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
         threads.push(thread::spawn(move || {
             loop {
-                println!("Checking subscriptions...");
+                trace!("Checking subscriptions...");
                 for (thing_id, subs) in subscriptions.iter() {
                     for (topic, _filter) in subs.iter() {
-                        println!(
+                        trace!(
                             "CHECKING EVENTS FROM (thingId -> topic): {} -> {}",
-                            thing_id, topic
+                            thing_id,
+                            topic
                         );
 
                         let events = safething_comm
@@ -266,14 +273,14 @@ where
                             Err(_) => vec![],
                         };
                         for event in events_vec.iter() {
-                            println!("Event occurred for topic: {}, event: {}", topic, event);
+                            debug!("Event occurred for topic: {}, event: {}", topic, event);
                             (notifs_cb)(thing_id.as_str(), topic.as_str(), event.as_str());
                             // TODO: keep track of the events that were already notified
                         }
                     }
                 }
 
-                println!("CHECKED SUBSCRIPTIONS....WAIT FOR NEXT LOOP");
+                trace!("CHECKED SUBSCRIPTIONS....WAIT FOR NEXT LOOP");
                 thread::sleep(Duration::from_millis(5000));
             }
         }));
@@ -285,14 +292,14 @@ where
         let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
         threads.push(thread::spawn(move || {
             loop {
-                println!("Checking for new action requests...");
+                trace!("Checking for new action requests...");
                 let actions_reqs = safething_comm.get_actions_requests().unwrap();
                 let actions_reqs_vec: ActionArgs = match serde_json::from_str(&actions_reqs) {
                     Ok(vec) => vec,
                     Err(_) => vec![],
                 };
                 //for action_req in actions_reqs_vec.iter() {
-                println!("Action requested: {:?}, action_req:", actions_reqs_vec);
+                debug!("Action requested: {:?}, action_req:", actions_reqs_vec);
                 (action_req_cb)(
                     "thing_id.as_str()",
                     "actions_reqs_vec.as_str()",
@@ -301,12 +308,12 @@ where
                 // TODO: keep track of the actions requests that were already notified
                 //}
 
-                println!("CHECKED ACTIONS....WAIT FOR NEXT LOOP");
+                trace!("CHECKED ACTIONS....WAIT FOR NEXT LOOP");
                 thread::sleep(Duration::from_millis(4000));
             }
         }));
 
-        println!("SAFEthing Connected with ID: {}", self.thing_id);
+        info!("SAFEthing Connected with ID: {}", self.thing_id);
         Ok(())
     }
 
@@ -349,7 +356,7 @@ where
     /// to request actions, subscribe to topics, and receive notifications upon events.
     pub fn publish(&mut self) -> ResultReturn<()> {
         let _ = self.safe_thing_comm.set_status(ThingStatus::Published);
-        println!("SAFEthing published with ID: {}", self.thing_id);
+        info!("SAFEthing published with ID: {}", self.thing_id);
         Ok(())
     }
 
@@ -380,7 +387,7 @@ where
     /// Notify of an event associated to an speficic topic.
     /// Eventually this can support multiple topics.
     pub fn notify(&mut self, topic: &str, data: &str) -> ResultReturn<()> {
-        println!("Notifying event for topic: {}, data: {}", topic, data);
+        info!("Notifying event for topic: {}, data: {}", topic, data);
         let events: String = self.safe_thing_comm.get_topic_events(topic)?;
         let mut events_vec: Vec<String> = match serde_json::from_str(&events) {
             Ok(vec) => vec,

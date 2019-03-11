@@ -228,7 +228,7 @@ impl SAFEthingComm {
         let start = SystemTime::now();
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
+            .expect("Failed to get time since epoch");
         let actions_req_key = format!(
             "{}{:?}",
             SAFE_THING_ENTRY_K_ACTION_REQ,

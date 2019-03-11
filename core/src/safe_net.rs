@@ -15,6 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with the SAFEthing Framework. If not, see <https://www.gnu.org/licenses/>.
 
+extern crate log;
+
+use log::{debug, warn};
+
 extern crate ffi_utils;
 extern crate safe_app;
 extern crate safe_core;
@@ -105,7 +109,7 @@ impl SAFENet {
     // private helper function
     #[cfg(feature = "fake-auth")]
     fn register(&mut self, _: &str, _: &str) -> ResultReturn<()> {
-        println!("Using fake authorisation for testing...");
+        debug!("Using fake authorisation for testing...");
         self.safe_app = Some(create_app());
         self.conn_status = ConnStatus::Connected;
         Ok(())
@@ -116,7 +120,7 @@ impl SAFENet {
     fn register(&mut self, app_id: &str, uri: &str) -> ResultReturn<()> {
         let disconnect_cb = || {
             //self.conn_status = ConnStatus::Disconnected;
-            println!("Connection with the SAFE Network was lost");
+            warn!("Connection with the SAFE Network was lost");
         };
 
         match SAFENetHelpers::decode_ipc_msg(&uri) {
@@ -217,7 +221,7 @@ impl SAFENet {
                 Ok(()) => Ok(MutableData(md_info_pub)),
                 Err(error_code) => {
                     if error_code == ERR_DATA_EXISTS {
-                        println!("MutableData already exits");
+                        debug!("MutableData already exits");
                         Ok(MutableData(md_info_pub))
                     } else {
                         Err(Error::new(
@@ -298,11 +302,11 @@ impl SAFENet {
         match SAFENetHelpers::mdata_get(app, &mdata.0, key) {
             Ok((v, version)) => {
                 let str: String = String::from_utf8(v).unwrap();
-                println!(
+                debug!(
                     "Entry already exists: '{}' => '{}' (version {})",
                     key, str, version
                 );
-                println!(
+                debug!(
                     "Let's update it with: '{}' (version {})",
                     value,
                     version + 1
@@ -326,7 +330,7 @@ impl SAFENet {
             }
             Err(error_code) => {
                 if error_code == ERR_NO_SUCH_ENTRY {
-                    println!("Entry doesn't exist. Let's insert: '{}' '{}'", key, value);
+                    debug!("Entry doesn't exist. Let's insert: '{}' '{}'", key, value);
                     unsafe {
                         call_0(|ud, cb| {
                             mdata_entry_actions_insert(
