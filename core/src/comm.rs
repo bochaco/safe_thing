@@ -22,6 +22,7 @@ use errors::{Error, ErrorCode, ResultReturn};
 // Functions to access the SAFE Network
 use self::safe_core::ffi::arrays::XorNameArray;
 use safe_net::{MutableData, SAFENet};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const SAFE_THING_TYPE_TAG: u64 = 27417;
 
@@ -35,6 +36,7 @@ static SAFE_THING_ENTRY_K_TOPICS: &'static str = "_safe_thing_topics";
 static SAFE_THING_ENTRY_K_ACTIONS: &'static str = "_safe_thing_actions";
 static SAFE_THING_ENTRY_K_SUBSCRIPTIONS: &'static str = "_safe_thing_subscriptions";
 static SAFE_THING_ENTRY_K_EVENTS: &'static str = "_safe_thing_events_";
+static SAFE_THING_ENTRY_K_ACTION_REQ: &'static str = "_safe_thing_action_req_";
 
 #[derive(Debug)]
 pub enum ThingStatus {
@@ -44,9 +46,6 @@ pub enum ThingStatus {
     Disabled,
 }
 
-// TODO: change to Vec<&'static str>
-pub type ActionArgs = Vec<String>; // the values are opaque for the framework
-
 pub struct SAFEthingComm {
     thing_id: String,
     safe_net: SAFENet,
@@ -54,7 +53,6 @@ pub struct SAFEthingComm {
     xor_name: XorNameArray,
 }
 
-#[allow(unused_variables)]
 impl SAFEthingComm {
     pub fn new(thing_id: &str, auth_uri: &str) -> ResultReturn<SAFEthingComm> {
         let safe_thing_comm = SAFEthingComm {
@@ -64,12 +62,6 @@ impl SAFEthingComm {
             thing_mdata: Default::default(),
             xor_name: Default::default(),
         };
-
-        println!(
-            "SAFE Network connection status for thing '{}': {}",
-            thing_id,
-            safe_thing_comm.safe_net.get_conn_status()
-        );
 
         Ok(safe_thing_comm)
     }
@@ -103,7 +95,7 @@ impl SAFEthingComm {
                 return Err(Error::new(
                     ErrorCode::InvalidParameters,
                     format!("Status param is invalid: {:?}", status).as_str(),
-                ))
+                ));
             }
         }
         self.safe_net.mutable_data_set_value(
@@ -187,14 +179,13 @@ impl SAFEthingComm {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn get_subscriptions(&self) -> ResultReturn<(String)> {
         match self
             .safe_net
             .mutable_data_get_value(&self.thing_mdata, SAFE_THING_ENTRY_K_SUBSCRIPTIONS)
         {
             Ok(str) => Ok(str),
-            Err(err) => Ok(String::from("")),
+            Err(_) => Ok(String::from("{}")),
         }
     }
 
@@ -205,7 +196,6 @@ impl SAFEthingComm {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn get_topic_events(&self, topic: &str) -> ResultReturn<(String)> {
         let topic_entry_key = SAFE_THING_ENTRY_K_EVENTS.to_owned() + topic;
         match self
@@ -213,11 +203,10 @@ impl SAFEthingComm {
             .mutable_data_get_value(&self.thing_mdata, &topic_entry_key)
         {
             Ok(str) => Ok(str),
-            Err(err) => Ok(String::from("")),
+            Err(_) => Ok(String::from("[]")),
         }
     }
 
-    #[allow(dead_code)]
     pub fn get_thing_topic_events(&self, thing_id: &str, topic: &str) -> ResultReturn<(String)> {
         let topic_entry_key = SAFE_THING_ENTRY_K_EVENTS.to_owned() + topic;
         let thing_mdata = self.get_mdata(thing_id)?;
@@ -226,19 +215,42 @@ impl SAFEthingComm {
             .mutable_data_get_value(&thing_mdata, &topic_entry_key)
         {
             Ok(str) => Ok(str),
-            Err(err) => Ok(String::from("")),
+            Err(_) => Ok(String::from("[]")),
         }
     }
 
-    #[allow(dead_code)]
     pub fn send_action_request(
         &self,
         thing_id: &str,
         action: &str,
-        args: ActionArgs,
-    ) -> ResultReturn<String> {
-        // TODO: send it thru the network
-        Ok(String::from("action request queued"))
+        args: &str,
+    ) -> ResultReturn<()> {
+        let start = SystemTime::now();
+        let since_the_epoch = start
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+        let actions_req_key = format!(
+            "{}{:?}",
+            SAFE_THING_ENTRY_K_ACTION_REQ,
+            since_the_epoch.as_nanos()
+        );
+        let action_req = format!("{:?}:{:?}", action, args);
+        let thing_mdata = self.get_mdata(thing_id)?;
+        self.safe_net
+            .mutable_data_set_value(&thing_mdata, &actions_req_key, &action_req)?;
+
+        Ok(())
+    }
+
+    pub fn get_actions_requests(&self) -> ResultReturn<(String)> {
+        // TODO: get entries and get only the ones which are actions requests
+        match self
+            .safe_net
+            .mutable_data_get_value(&self.thing_mdata, SAFE_THING_ENTRY_K_ACTION_REQ)
+        {
+            Ok(str) => Ok(str),
+            Err(_) => Ok(String::from("[]")),
+        }
     }
 
     pub fn sim_net_disconnect(&mut self) {

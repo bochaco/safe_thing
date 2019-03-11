@@ -9,7 +9,7 @@
 
 ### Run example SAFEthing application
 
-This project is in its very early stage, at the moment there is a tiny example application (`/core/examples/printer.rs`) which showcases how the SAFEthing API is intended to be used. You can run this example app with the following commands (please make sure you have rustc v1.31.0 or later):
+This project is in its very early stage, at the moment there is a tiny example application (`/core/examples/printer.rs`) which showcases how the SAFEthing API is intended to be used. You can run this example app with the following commands (please make sure you have rustc v1.33.0 or later):
 ```
 $ git clone https://github.com/bochaco/safe_thing.git
 $ cd ./safe_thing/core
@@ -82,44 +82,51 @@ extern crate safe_thing;
 
 use safe_thing::{SAFEthing, ThingAttr, Topic, ActionDef, AccessType};
 
-fn print_requested_notif(thing_id: &str, topic: &str, data: &str) {
-    println!("Notification received from thing_id: {}, topic: {}, data: {}", thing_id, topic, data)
+fn subscriptions_notif(thing_id: &str, topic: &str, data: &str) {
+    println!(
+        "New event: Notification received from thing_id: {}, topic: {}, data: {}",
+        thing_id, topic, data
+    )
 }
 
 pub fn main() {
     let id = "printer-serial-number-01010101";
+
     let auth_uri = "safe-bmv0lm1hawrzywzllmv4yw1wbgvzlm1krxhhbxbszq:AQAAAOIDI_gAAAAAAAAAACAAAAAAAAAAGWzDHH2GG-TUtS_qLvytHNXrAPWGtI6QLDuoP28EE_0gAAAAAAAAALPyoRvbtvPKs9bWYhkdhfkltybFTBJerAWEARetysrtvsjSRTHVRTA_a6ysxSGIUWz9pOLlq9hRMM-EJQctDpVkhRTXPar-W0AAAAAAAAAA-O8HsVV5ZZbiAwWTTFXQeNX7pSYtLmZXRHnrdVyXZvv_a6ysxSGIUWz9pOLlq9hRMM-EJQctDpVkhRTXPar-WyAAAAAAAAAAUnTeCf39C-KDfioarbgDedqYhu_ZEpCHK_CatkiYNFUgAAAAAAAAAOTkFE7GibxaH0egTV1NtczggZkyAsCVRY6AcbceiSNfAAAAAAAAAAAAAAAAAAAAAAAAAAAAMCralz2EJh0ML2wMZLBhh0hELI1dIQUlVtaWHqIClqmYOgAAAAAAABgAAAAAAAAA2lo16ByCIq4SnojMIRPV_RSvQIOelGUD";
 
-    let attributes = vec![
-        ThingAttr::new("name", "Printer at home"),
-        ThingAttr::new("model", "HP LaserJet 400 M401"),
-        ThingAttr::new("firmware", "v1.3.0"),
+    let attributes = [
+        ThingAttr::new("name", "SAFEthing Printer"),
+        ThingAttr::new("model", "ArduinoDigital PRT1"),
+        ThingAttr::new("firmware", "v0.1.0"),
         ThingAttr::new("status", "on"),
-        ThingAttr::new("ink-level", "%")
-    ];
-    let topics = vec![
-        Topic::new("printRequested"),
-        Topic::new("printSuccess"),
-        Topic::new("printFail"),
-        Topic::new("outOfInk"),
-    ];
-    let actions = vec![
-        ActionDef::new("turnOn", AccessType::Owner, vec![]),
-        ActionDef::new("turnOff", AccessType::Owner, vec!["timer"]),
-        ActionDef::new("print", AccessType::Owner, vec!["data", "copies"]),
-        ActionDef::new("orderInk", AccessType::Group, vec![])
+        ThingAttr::new("ink-level", "%"),
     ];
 
-    let mut safe_thing: SAFEthing;
-    match SAFEthing::new(id, auth_uri, print_requested_notif) {
-        Ok(s) => safe_thing = s,
-        Err(e) => panic!("Couldn't create SAFEthing instance: {}", e)
+    let topics = [
+        Topic::new("printRequested", AccessType::All),
+        Topic::new("printPaid", AccessType::All),
+        Topic::new("printSuccess", AccessType::All),
+        Topic::new("printFail", AccessType::All),
+        Topic::new("outOfInk", AccessType::All),
+    ];
+
+    let actions = [
+        ActionDef::new("turnOn", AccessType::Owner, &[]),
+        ActionDef::new("turnOff", AccessType::Owner, &["timer"]),
+        ActionDef::new("print", AccessType::All, &["data", "deliverTo"]),
+        ActionDef::new("orderInk", AccessType::Owner, &[]),
+    ];
+
+    let mut safe_thing =
+        SAFEthing::new(&id, auth_uri, &subscriptions_notif, &action_request_notif).unwrap();
+
+    match safe_thing.register(&attributes, &topics, &actions) {
+        Ok(_) => println!("Printer registered on the network"),
+        Err(e) => println!("Failed to register SAFEthing: {}", e)
     }
 
-    let _ = safe_thing.register_thing(attributes, topics, actions);
-
-    match safe_thing.get_thing_status(id) {
-        Ok(status) => println!("\nCurrent status: {:?}", status),
+    match safe_thing.status() {
+        Ok(status) => println!("Current status: {}", status),
         Err(e) => println!("Failed getting status: {}", e)
     }
 
@@ -129,10 +136,11 @@ pub fn main() {
 
 ### Project Development Roadmap
 
+- [ ] Document API
+- [ ] Creation of test suite for API
+- [ ] Creation of a showcasing app using the test SAFE Network
 - [ ] Cross-compilation tools/doc for MIPS
 - [ ] Cross-compilation tools/doc for ARM
-- [ ] Creation of a showcasing app using the test SAFE Network
-- [ ] Creation of test suite for API
 - [ ] Implementation of FFI interface
 - [ ] Implementation of Javascript binding
 - [ ] Documentation of the communication protocol

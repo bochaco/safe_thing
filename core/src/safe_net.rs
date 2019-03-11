@@ -46,6 +46,9 @@ use self::safe_core::ffi::ipc::req::PermissionSet;
 use std::{fmt, str};
 
 use errors::{Error, ErrorCode, ResultReturn};
+
+// TODO: these should be imported from safe_app::errors::codes
+// but `errors` module is currently private
 const ERR_DATA_EXISTS: i32 = -104;
 const ERR_NO_SUCH_ENTRY: i32 = -106;
 
@@ -157,12 +160,10 @@ impl SAFENet {
         Ok(safe_net)
     }
 
-    #[allow(dead_code)]
     pub fn get_conn_status(&self) -> &ConnStatus {
         &self.conn_status
     }
 
-    #[allow(dead_code)]
     pub fn gen_xor_name(&self, in_str: &str) -> [u8; 32] {
         let sha3 = unsafe {
             call_vec_u8(|ud, cb| sha3_hash(in_str.as_ptr(), in_str.len(), ud, cb)).unwrap()
@@ -273,16 +274,14 @@ impl SAFENet {
         let app = self.safe_app.as_ref().unwrap();
         match SAFENetHelpers::mdata_get(app, &mdata.0, key) {
             Ok((value, _)) => Ok(String::from_utf8(value).unwrap()),
-            Err(error_code) => {
-                return Err(Error::new(
-                    ErrorCode::NetworkErr,
-                    format!(
-                        "Failed to retrieve value from MutableData: {:?}",
-                        error_code
-                    )
-                    .as_str(),
-                ))
-            }
+            Err(error_code) => Err(Error::new(
+                ErrorCode::NetworkErr,
+                format!(
+                    "Failed to retrieve value from MutableData: {:?}",
+                    error_code
+                )
+                .as_str(),
+            )),
         }
     }
 
@@ -363,6 +362,7 @@ impl SAFENet {
         Ok(())
     }
 
+    // The following functions are mainly utilities for dvelopers
     #[cfg(feature = "use-mock-routing")]
     pub fn sim_net_disconnect(&mut self) {
         if cfg!(not(feature = "fake-auth")) {
