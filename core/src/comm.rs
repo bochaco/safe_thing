@@ -66,13 +66,13 @@ impl SAFEthingComm {
         Ok(safe_thing_comm)
     }
 
-    pub fn store_thing_entity(&mut self) -> ResultReturn<String> {
+    pub fn store_thing_entity(&mut self) -> ResultReturn<(String, u64)> {
         let xor_name = self.safe_net.gen_xor_name(self.thing_id.as_str());
         self.thing_mdata = self
             .safe_net
             .new_pub_mutable_data(xor_name, SAFE_THING_TYPE_TAG)?;
         self.xor_name = xor_name;
-        self.addr_name()
+        Ok((self.addr_name()?, SAFE_THING_TYPE_TAG))
     }
 
     pub fn addr_name(&self) -> ResultReturn<String> {
@@ -219,38 +219,76 @@ impl SAFEthingComm {
         }
     }
 
-    pub fn send_action_request(
-        &self,
-        thing_id: &str,
-        action: &str,
-        args: &str,
-    ) -> ResultReturn<()> {
+    pub fn send_action_request(&self, thing_id: &str, action_req: &str) -> ResultReturn<u128> {
         let start = SystemTime::now();
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)
             .expect("Failed to get time since epoch");
-        let actions_req_key = format!(
-            "{}{:?}",
-            SAFE_THING_ENTRY_K_ACTION_REQ,
-            since_the_epoch.as_nanos()
-        );
-        let action_req = format!("{:?}:{:?}", action, args);
+        let request_id: u128 = since_the_epoch.as_nanos();
+        let actions_req_key = format!("{}{:?}", SAFE_THING_ENTRY_K_ACTION_REQ, request_id);
         let thing_mdata = self.get_mdata(thing_id)?;
         self.safe_net
-            .mutable_data_set_value(&thing_mdata, &actions_req_key, &action_req)?;
+            .mutable_data_set_value(&thing_mdata, &actions_req_key, action_req)?;
 
-        Ok(())
+        Ok(request_id)
     }
 
-    pub fn get_actions_requests(&self) -> ResultReturn<(String)> {
-        // TODO: get entries and get only the ones which are actions requests
-        match self
+    pub fn get_thing_action_request_state(
+        &self,
+        thing_id: &str,
+        request_id: u128,
+    ) -> ResultReturn<(String)> {
+        let actions_req_key = format!("{}{:?}", SAFE_THING_ENTRY_K_ACTION_REQ, request_id);
+        let thing_mdata = self.get_mdata(thing_id)?;
+        let action_req: String = match self
             .safe_net
-            .mutable_data_get_value(&self.thing_mdata, SAFE_THING_ENTRY_K_ACTION_REQ)
+            .mutable_data_get_value(&thing_mdata, &actions_req_key)
         {
-            Ok(str) => Ok(str),
-            Err(_) => Ok(String::from("[]")),
-        }
+            Ok(str) => str,
+            Err(_) => String::from("{}"),
+        };
+
+        Ok(action_req)
+    }
+
+    pub fn get_actions_requests(&self) -> ResultReturn<(Vec<(u128, String)>)> {
+        // FIXME: we are not being able to retrieve the entry with self.thing_mdata
+        let thing_mdata = self.get_mdata(&self.thing_id)?;
+
+        let actions_reqs = match self.safe_net.mutable_data_get_entries(&thing_mdata) {
+            Ok(entries) => {
+                entries
+                    .iter()
+                    .filter_map(|(key, value)| {
+                        // let's filter the soft-deleted values and those whic are not action requests
+                        if key.starts_with(SAFE_THING_ENTRY_K_ACTION_REQ) && !value.is_empty() {
+                            let request_id = key
+                                .replace(SAFE_THING_ENTRY_K_ACTION_REQ, "")
+                                .parse::<u128>()
+                                .unwrap();
+                            Some((request_id, value.clone()))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            }
+            Err(_) => vec![],
+        };
+
+        Ok(actions_reqs)
+    }
+
+    pub fn set_action_request_state(&self, request_id: u128, new_state: &str) -> ResultReturn<()> {
+        let actions_req_key = format!("{}{:?}", SAFE_THING_ENTRY_K_ACTION_REQ, request_id);
+
+        // FIXME: we are not being able to retrieve the entry with self.thing_mdata
+        let thing_mdata = self.get_mdata(&self.thing_id)?;
+
+        self.safe_net
+            .mutable_data_set_value(&thing_mdata, &actions_req_key, new_state)?;
+
+        Ok(())
     }
 
     pub fn sim_net_disconnect(&mut self) {

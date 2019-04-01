@@ -21,13 +21,16 @@ extern crate safe_core;
 
 use self::ffi_utils::test_utils::{send_via_user_data, sender_as_user_data};
 use self::ffi_utils::FfiResult;
-use self::safe_app::ffi::mutable_data::mdata_get_value;
+use self::safe_app::ffi::mutable_data::{
+    entries::mdata_list_entries, mdata_entries, mdata_get_value,
+};
 use self::safe_app::App;
 use self::safe_core::ffi::MDataInfo;
 #[cfg(not(feature = "fake-auth"))]
 use self::safe_core::ipc::resp::AuthGranted;
 #[cfg(not(feature = "fake-auth"))]
 use self::safe_core::ipc::{decode_msg, IpcError, IpcMsg, IpcResp};
+use self::safe_core::MDataEntry;
 use std::os::raw::c_void;
 use std::slice;
 use std::sync::mpsc;
@@ -90,4 +93,76 @@ pub fn mdata_get(app: &App, mdata: &MDataInfo, key: &str) -> Result<(Vec<u8>, u6
 
     let result = rx.recv().unwrap();
     result
+}
+
+// Retrieve the list of entries from a MutableData
+pub fn mdata_get_entries(app: &App, mdata: &MDataInfo) -> Result<Vec<(Vec<u8>, Vec<u8>)>, i32> {
+    extern "C" fn mdata_entries_cb(user_data: *mut c_void, res: *const FfiResult, entries_h: u64) {
+        unsafe {
+            let result: Result<u64, i32> = if (*res).error_code == 0 {
+                Ok(entries_h)
+            } else {
+                Err((*res).error_code)
+            };
+
+            send_via_user_data(user_data, result);
+        }
+    }
+
+    let (tx, rx) = mpsc::channel::<Result<u64, i32>>();
+    let mut ud = Default::default();
+    unsafe {
+        mdata_entries(
+            app as *const App,
+            mdata,
+            sender_as_user_data(&tx, &mut ud),
+            mdata_entries_cb,
+        )
+    };
+
+    let mdata_entries_handle = rx.recv().unwrap().unwrap();
+
+    // now that we have the mdta entries handle, let's get the list
+    extern "C" fn mdata_list_entries_cb(
+        user_data: *mut c_void,
+        res: *const FfiResult,
+        entries: *const MDataEntry,
+        entries_len: usize,
+    ) {
+        unsafe {
+            let result: Result<Vec<(Vec<u8>, Vec<u8>)>, i32> = if (*res).error_code == 0 {
+                let entries_slice = slice::from_raw_parts(entries, entries_len);
+                let entries_vec: Vec<(Vec<u8>, Vec<u8>)> = entries_slice
+                    .iter()
+                    .map(|entry| {
+                        let key = slice::from_raw_parts(entry.key.key, entry.key.key_len).to_vec();
+                        let value =
+                            slice::from_raw_parts(entry.value.content, entry.value.content_len)
+                                .to_vec();
+                        (key, value)
+                    })
+                    .collect();
+
+                Ok(entries_vec)
+            } else {
+                Err((*res).error_code)
+            };
+
+            send_via_user_data(user_data, result);
+        }
+    }
+
+    let (tx, rx) = mpsc::channel::<Result<Vec<(Vec<u8>, Vec<u8>)>, i32>>();
+    let mut ud = Default::default();
+    unsafe {
+        mdata_list_entries(
+            app as *const App,
+            mdata_entries_handle,
+            sender_as_user_data(&tx, &mut ud),
+            mdata_list_entries_cb,
+        )
+    };
+
+    let mdata_entries = rx.recv().unwrap();
+    mdata_entries
 }

@@ -28,11 +28,23 @@ fn subscriptions_notif(thing_id: &str, topic: &str, data: &str) {
     )
 }
 
-fn action_request_notif(thing_id: &str, action: &str, args: &[&str]) {
+fn action_request_notif(
+    request_id: u128,
+    state: &str,
+    thing_id: &str,
+    action: &str,
+    args: &[&str],
+) {
     println!(
-        "New action: Action request received from thing_id: {}, action: {}, args: {:?}",
-        thing_id, action, args
-    )
+        "New action: Action request received, id: '{}', state: '{}', from thing_id: '{}', action: '{}', args: {:?}",
+        request_id, state, thing_id, action, args
+    );
+}
+
+fn handle_print_req_state(state: &str) -> bool {
+    println!("Print action request new state: {}", state);
+
+    true // keep monitoring the state until it's "Done"
 }
 
 pub fn main() {
@@ -70,50 +82,63 @@ pub fn main() {
         ActionDef::new("orderInk", AccessType::Owner, &[]),
     ];
 
+    // Let's create an instance of SAFEthing for the printer.
+    // We already provide the two callback functions to be called
+    // for subcriptions notifications and action requests respectively.
     let mut safe_thing =
         SAFEthing::new(&id, auth_uri, &subscriptions_notif, &action_request_notif).unwrap();
 
+    // Register the SAFEthing on the network, this won't make it active yet
     safe_thing
         .register(&attributes, &topics, &actions)
-        .map(|()| println!("\nPrinter registered on the network"))
+        .map(|()| println!("Printer registered on the network"))
         .unwrap();
+
     /*
         safe_thing
             .status()
-            .map(|status| println!("\nCurrent printer status: {}", status))
+            .map(|status| println!("Current printer status: {}", status))
             .unwrap();
 
         safe_thing
             .get_thing_attrs(&id)
-            .map(|attrs| println!("\nAttributes: {:?}", attrs))
+            .map(|attrs| println!("Attributes: {:?}", attrs))
             .unwrap();
 
         safe_thing
             .get_thing_topics(&id)
-            .map(|topics| println!("\nTopics: {:?}", topics))
+            .map(|topics| println!("Topics: {:?}", topics))
             .unwrap();
 
         safe_thing
             .get_thing_actions(&id)
-            .map(|actions| println!("\nActions: {:?}", actions))
+            .map(|actions| println!("Actions: {:?}", actions))
             .unwrap();
     */
+
+    // Let's now make it active and ready for receiving action requests
     safe_thing.publish().expect("Failed to publish SAFEthing");
 
+    /****** this shall be part of a printer_consumer app *****
     // for testing as it probably doesn't make sense
     // to subscribe to its own events
     safe_thing
         .subscribe(&id, "printRequested")
         .expect("Failed to subscribe to a topic");
-
-    safe_thing
-        .action_request(&id, "print", &["arg1", "arg2"])
-        .expect("Failed to send an action rquest");
-    /*
-        thread::sleep(Duration::from_millis(6000));
-        println!("SENDING NOTIFICATION");
-        let _ = safe_thing.notify("printRequested", "print job started");
-        println!("NOTIFICATION SENT");
     */
-    thread::sleep(Duration::from_millis(20000));
+
+    let req_id = safe_thing
+        .action_request(
+            &id,
+            "print",
+            &["some text", "recipient"],
+            &handle_print_req_state,
+        )
+        .expect("Failed to send 'print' action request");
+    println!("Action request sent, id: '{}'", req_id);
+    /***** END printer_consumer *************/
+
+    // Let's just wait for any request sent,
+    // this would usually be an infinite loop in a SAFEthing
+    thread::sleep(Duration::from_millis(9000));
 }

@@ -17,7 +17,7 @@
 
 extern crate log;
 
-use log::{debug, warn};
+use log::{debug, trace, warn};
 
 extern crate ffi_utils;
 extern crate safe_app;
@@ -164,6 +164,7 @@ impl SAFENet {
         Ok(safe_net)
     }
 
+    #[allow(dead_code)]
     pub fn get_conn_status(&self) -> &ConnStatus {
         &self.conn_status
     }
@@ -276,16 +277,24 @@ impl SAFENet {
 
     pub fn mutable_data_get_value(&self, mdata: &MutableData, key: &str) -> ResultReturn<String> {
         let app = self.safe_app.as_ref().unwrap();
+        trace!("Getting entry with key {}", key);
         match SAFENetHelpers::mdata_get(app, &mdata.0, key) {
-            Ok((value, _)) => Ok(String::from_utf8(value).unwrap()),
-            Err(error_code) => Err(Error::new(
-                ErrorCode::NetworkErr,
-                format!(
-                    "Failed to retrieve value from MutableData: {:?}",
-                    error_code
-                )
-                .as_str(),
-            )),
+            Ok((value, version)) => {
+                let val = String::from_utf8(value).unwrap();
+                trace!("Got entry (version {}) with value: {}", version, val);
+                Ok(val)
+            }
+            Err(error_code) => {
+                trace!("Entry not found with key {}", key);
+                Err(Error::new(
+                    ErrorCode::NetworkErr,
+                    format!(
+                        "Failed to retrieve value from MutableData: {:?}",
+                        error_code
+                    )
+                    .as_str(),
+                ))
+            }
         }
     }
 
@@ -302,11 +311,13 @@ impl SAFENet {
         match SAFENetHelpers::mdata_get(app, &mdata.0, key) {
             Ok((v, version)) => {
                 let str: String = String::from_utf8(v).unwrap();
-                debug!(
+                trace!(
                     "Entry already exists: '{}' => '{}' (version {})",
-                    key, str, version
+                    key,
+                    str,
+                    version
                 );
-                debug!(
+                trace!(
                     "Let's update it with: '{}' (version {})",
                     value,
                     version + 1
@@ -330,7 +341,7 @@ impl SAFENet {
             }
             Err(error_code) => {
                 if error_code == ERR_NO_SUCH_ENTRY {
-                    debug!("Entry doesn't exist. Let's insert: '{}' '{}'", key, value);
+                    trace!("Entry doesn't exist. Let's insert: '{}' '{}'", key, value);
                     unsafe {
                         call_0(|ud, cb| {
                             mdata_entry_actions_insert(
@@ -366,7 +377,42 @@ impl SAFENet {
         Ok(())
     }
 
-    // The following functions are mainly utilities for dvelopers
+    /// Retrieve the list of all entries from a MutableData
+    pub fn mutable_data_get_entries(
+        &self,
+        mdata: &MutableData,
+    ) -> ResultReturn<Vec<(String, String)>> {
+        let app = self.safe_app.as_ref().unwrap();
+        trace!("Getting entries from MutableData");
+        match SAFENetHelpers::mdata_get_entries(app, &mdata.0) {
+            Ok(entries) => {
+                let entries_list = entries
+                    .iter()
+                    .map(|(key, value)| {
+                        let k = String::from_utf8(key.to_vec()).unwrap();
+                        let val = String::from_utf8(value.to_vec()).unwrap();
+                        trace!("Got entry with key {}: and value: {}", k, val);
+                        (k, val)
+                    })
+                    .collect();
+
+                Ok(entries_list)
+            }
+            Err(error_code) => {
+                trace!("Failed to retrieve list of entries, error {}", error_code);
+                Err(Error::new(
+                    ErrorCode::NetworkErr,
+                    format!(
+                        "Failed to retrieve entries from MutableData: {:?}",
+                        error_code
+                    )
+                    .as_str(),
+                ))
+            }
+        }
+    }
+
+    // The following functions are mainly utilities for developers
     #[cfg(feature = "use-mock-routing")]
     pub fn sim_net_disconnect(&mut self) {
         if cfg!(not(feature = "fake-auth")) {

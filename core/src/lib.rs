@@ -22,7 +22,7 @@ extern crate serde_json;
 extern crate env_logger;
 extern crate log;
 
-use log::{debug, info, trace};
+use log::{debug, error, info, trace, warn};
 
 mod comm;
 mod errors;
@@ -32,11 +32,16 @@ mod safe_net_helpers;
 use comm::{SAFEthingComm, ThingStatus};
 use errors::{Error, ErrorCode, ResultReturn};
 use std::collections::BTreeMap;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{fmt, thread};
 
 const THING_ID_MIN_LENGTH: usize = 5;
-// const SUBSCRIPTIONS_CHECK_FREQ: u64 = 5;
+const SUBSCRIPTIONS_CHECK_FREQ: u64 = 5_000;
+const ACTION_REQUEST_CHECK_FREQ: u64 = 4_000;
+const ACTION_REQUEST_INIT_STATE: &str = "Requested";
+const ACTION_REQUEST_DONE_STATE: &str = "Done";
+const ACTION_REQUEST_MONITORING_FREQ: u64 = 2_000;
+const ACTION_REQUEST_MONITORING_TIMEOUT: u64 = 60_000;
 
 /// Group of SAFEthings that are allow to register to a topic
 /// Thing: access only to the thing's application. This is the default and lowest level of access type.
@@ -137,6 +142,14 @@ impl ActionDef {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct ActionReq {
+    pub thing_id: String,
+    pub action: String,
+    pub args: ActionArgs,
+    pub state: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 enum FilterOperator {
     Equal,
@@ -162,7 +175,7 @@ type ThingsSubscriptions = BTreeMap<String, Subscription>;
 pub struct SAFEthing<F: 'static, G: 'static>
 where
     F: Fn(&str, &str, &str),
-    G: Fn(&str, &str, &[&str]),
+    G: Fn(u128, &str, &str, &str, &[&str]),
 {
     pub thing_id: String,
     auth_uri: String,
@@ -175,7 +188,7 @@ where
 impl<F, G> SAFEthing<F, G>
 where
     F: Fn(&str, &str, &str) + std::marker::Send + std::marker::Sync,
-    G: Fn(&str, &str, &[&str]) + std::marker::Send + std::marker::Sync,
+    G: Fn(u128, &str, &str, &str, &[&str]) + std::marker::Send + std::marker::Sync,
 {
     /// The thing id shall be an opaque string, and the auth URI shall not contain any
     /// scheme/protocol (i.e. without 'safe-...:' prefix) but just the encoded authorisation
@@ -218,9 +231,12 @@ where
         topics: &[Topic],
         actions: &[ActionDef],
     ) -> ResultReturn<()> {
-        // Register it in the network
-        let thing_xorname: String = self.safe_thing_comm.store_thing_entity()?;
-        debug!("SAFEthing entity XoRname: {}", thing_xorname);
+        // Register it on the network
+        let (thing_xorname, thing_typetag) = self.safe_thing_comm.store_thing_entity()?;
+        debug!(
+            "SAFEthing entity XoRname: {}:{}",
+            thing_xorname, thing_typetag
+        );
 
         // Populate entity with attributes
         let attrs: String = serde_json::to_string(&attrs).unwrap();
@@ -252,7 +268,7 @@ where
         // and sending the notifications
         let subscriptions = self.subscriptions.clone();
         let notifs_cb: &'static F = self.notifs_cb;
-        // TODO: share self.safething_comm among threads
+        // TODO: share self.safething_comm among threads?
         let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
         threads.push(thread::spawn(move || {
             loop {
@@ -281,35 +297,64 @@ where
                 }
 
                 trace!("CHECKED SUBSCRIPTIONS....WAIT FOR NEXT LOOP");
-                thread::sleep(Duration::from_millis(5000));
+                thread::sleep(Duration::from_millis(SUBSCRIPTIONS_CHECK_FREQ));
             }
         }));
 
         // Spawn thread in charge of checking for action requests
         // and invoking the corresponding function
         let action_req_cb: &'static G = self.action_req_cb;
-        // TODO: share self.safething_comm among threads
+        // TODO: share self.safething_comm among threads?
         let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
         threads.push(thread::spawn(move || {
             loop {
                 trace!("Checking for new action requests...");
-                let actions_reqs = safething_comm.get_actions_requests().unwrap();
-                let actions_reqs_vec: ActionArgs = match serde_json::from_str(&actions_reqs) {
-                    Ok(vec) => vec,
-                    Err(_) => vec![],
-                };
-                //for action_req in actions_reqs_vec.iter() {
-                debug!("Action requested: {:?}, action_req:", actions_reqs_vec);
-                (action_req_cb)(
-                    "thing_id.as_str()",
-                    "actions_reqs_vec.as_str()",
-                    &["actions_reqs_vec"],
-                );
-                // TODO: keep track of the actions requests that were already notified
-                //}
+                let actions_reqs_vec = safething_comm.get_actions_requests().unwrap();
+                trace!("Actions requested to process: {:?}", actions_reqs_vec);
+                for (request_id, action_req_str) in actions_reqs_vec.iter() {
+                    match serde_json::from_str(&action_req_str) {
+                        Ok(ActionReq {
+                            thing_id,
+                            action,
+                            args,
+                            state,
+                        }) => {
+                            if state == ACTION_REQUEST_INIT_STATE {
+                                debug!("Action requested: {:?}", action);
+                                let args2 = args.clone();
+                                let action_args: Vec<&str> =
+                                    args.iter().map(|i| i.as_str()).collect();
+                                (action_req_cb)(
+                                    *request_id,
+                                    state.as_str(),
+                                    thing_id.as_str(),
+                                    action.as_str(),
+                                    &action_args,
+                                );
+                                debug!(
+                                    "Action request handled by SAFEthing. Updating new state to {}",
+                                    ACTION_REQUEST_DONE_STATE
+                                );
+                                let action_req = ActionReq {
+                                    thing_id,
+                                    action,
+                                    args: args2,
+                                    state: ACTION_REQUEST_DONE_STATE.to_string(),
+                                };
+                                let action_req_str: String =
+                                    serde_json::to_string(&action_req).unwrap();
+                                safething_comm
+                                    .set_action_request_state(*request_id, action_req_str.as_str())
+                                    .expect("Failed to update action request state");
+                            }
+                        }
+                        Err(err) => error!("Action request is invalid, thus ignoring it: {}", err),
+                    };
 
+                    // TODO: keep track of the actions requests that were already notified
+                }
                 trace!("CHECKED ACTIONS....WAIT FOR NEXT LOOP");
-                thread::sleep(Duration::from_millis(4000));
+                thread::sleep(Duration::from_millis(ACTION_REQUEST_CHECK_FREQ));
             }
         }));
 
@@ -400,18 +445,116 @@ where
         Ok(())
     }
 
-    /// Send an action request to a SAFEthing and wait for the response
+    /// Send an action request to a SAFEthing and monitor its state
     /// Search on the network by thing_id
-    pub fn action_request(&self, thing_id: &str, action: &str, args: &[&str]) -> ResultReturn<()> {
-        let args_str: String = serde_json::to_string(&args).unwrap();
+    pub fn action_request(
+        &self,
+        thing_id: &str,
+        action: &str,
+        args: &[&str],
+        cb: &'static (Fn(&str) -> bool + std::marker::Send + std::marker::Sync),
+    ) -> ResultReturn<u128> {
+        let mut args_vec = Vec::new();
+        args_vec.extend(args.iter().map(|&i| i.to_string()));
+        let action_req = ActionReq {
+            thing_id: thing_id.to_string(),
+            action: action.to_string(),
+            args: args_vec,
+            state: ACTION_REQUEST_INIT_STATE.to_string(),
+        };
+        let action_req_str: String = serde_json::to_string(&action_req).unwrap();
+
+        let req_id = self
+            .safe_thing_comm
+            .send_action_request(thing_id, action_req_str.as_str())?;
+
+        // TODO: share self.safething_comm among threads?
+        let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
+        spawn_monitoring_thread(thing_id.to_string(), req_id, safething_comm, cb);
+
+        Ok(req_id)
+    }
+
+    /// Update the state of an action reqeust
+    pub fn update_action_request_state(
+        &self,
+        request_id: u128,
+        new_state: &str,
+    ) -> ResultReturn<()> {
         self.safe_thing_comm
-            .send_action_request(thing_id, action, args_str.as_str())
+            .set_action_request_state(request_id, new_state)?;
+        Ok(())
     }
 
     /// Only for testing, to simulate a network disconnection event
     pub fn simulate_net_disconnect(&mut self) {
         self.safe_thing_comm.sim_net_disconnect();
     }
+}
+
+fn spawn_monitoring_thread(
+    thing_id: String,
+    request_id: u128,
+    safething_comm: SAFEthingComm,
+    cb: &'static (Fn(&str) -> bool + std::marker::Send + std::marker::Sync),
+) {
+    let mut current_state = ACTION_REQUEST_INIT_STATE.to_string();
+    let mut keep_checking = true;
+    let start_timestamp = SystemTime::now();
+    let mut timeout = false;
+
+    thread::spawn(move || {
+        while keep_checking && current_state != ACTION_REQUEST_DONE_STATE && !timeout {
+            trace!("Checking action request state...");
+            let action_req_str = safething_comm
+                .get_thing_action_request_state(&thing_id, request_id)
+                .unwrap();
+            match serde_json::from_str(&action_req_str) {
+                Ok(ActionReq {
+                    thing_id: _,
+                    action: _,
+                    args: _,
+                    state,
+                }) => {
+                    trace!(
+                        "Action request new state obtained, request id: {}, new state: {}",
+                        request_id,
+                        state
+                    );
+                    if state != current_state {
+                        current_state = state.clone();
+                        debug!(
+                        "Callback to notify action request new state, request id: {}, new state: {}",
+                        request_id, state);
+                        keep_checking = (cb)(state.as_str());
+                        debug!("Keep checking action request state? {}", keep_checking);
+                    }
+                }
+                Err(_) => {
+                    error!(
+                        "Actin request ({}) current state couldn't be read",
+                        request_id
+                    );
+                }
+            };
+
+            trace!("CHECKED ACTION REQUEST STATE....WAIT FOR NEXT LOOP");
+            thread::sleep(Duration::from_millis(ACTION_REQUEST_MONITORING_FREQ));
+            timeout = match start_timestamp.elapsed() {
+                Ok(elapsed) => elapsed > Duration::from_millis(ACTION_REQUEST_MONITORING_TIMEOUT),
+                Err(_) => false,
+            };
+
+            if timeout {
+                warn!(
+                    "Monitoring thread for action request {} timed out",
+                    request_id
+                );
+            }
+        }
+
+        debug!("Ending monitoring thread for request: {}", request_id);
+    });
 }
 
 #[cfg(test)]
