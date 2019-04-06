@@ -68,6 +68,7 @@ impl SAFEthingComm {
 
     pub fn store_thing_entity(&mut self) -> ResultReturn<(String, u64)> {
         let xor_name = self.safe_net.gen_xor_name(self.thing_id.as_str());
+        // FIXME: set permissions to allow others to 'Insert'
         self.thing_mdata = self
             .safe_net
             .new_pub_mutable_data(xor_name, SAFE_THING_TYPE_TAG)?;
@@ -93,7 +94,7 @@ impl SAFEthingComm {
             ThingStatus::Disabled => status_str = SAFE_THING_ENTRY_V_STATUS_DISABLED,
             _ => {
                 return Err(Error::new(
-                    ErrorCode::InvalidParameters,
+                    ErrorCode::InvalidArgument,
                     format!("Status param is invalid: {:?}", status).as_str(),
                 ));
             }
@@ -180,9 +181,12 @@ impl SAFEthingComm {
     }
 
     pub fn get_subscriptions(&self) -> ResultReturn<(String)> {
+        // FIXME: we are not being able to retrieve the entry with self.thing_mdata
+        let thing_mdata = self.get_mdata(&self.thing_id)?;
+
         match self
             .safe_net
-            .mutable_data_get_value(&self.thing_mdata, SAFE_THING_ENTRY_K_SUBSCRIPTIONS)
+            .mutable_data_get_value(&thing_mdata, SAFE_THING_ENTRY_K_SUBSCRIPTIONS)
         {
             Ok(str) => Ok(str),
             Err(_) => Ok(String::from("{}")),

@@ -21,7 +21,7 @@ pub type ResultReturn<T> = Result<T, Error>;
 
 #[derive(Debug)]
 pub enum ErrorCode {
-    InvalidParameters,
+    InvalidArgument,
     ConnectionErr,
     NetworkErr,
 }
@@ -47,7 +47,7 @@ impl fmt::Display for Error {
             f,
             "[Error] {} - {}",
             match (*self).code {
-                ErrorCode::InvalidParameters => "Invalid parameters",
+                ErrorCode::InvalidArgument => "Invalid argument",
                 ErrorCode::ConnectionErr => "Connection error",
                 ErrorCode::NetworkErr => "Network error",
             },

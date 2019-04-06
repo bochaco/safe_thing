@@ -32,7 +32,9 @@ mod safe_net_helpers;
 use comm::{SAFEthingComm, ThingStatus};
 use errors::{Error, ErrorCode, ResultReturn};
 use std::collections::BTreeMap;
-use std::time::{Duration, SystemTime};
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fmt, thread};
 
 const THING_ID_MIN_LENGTH: usize = 5;
@@ -150,6 +152,9 @@ struct ActionReq {
     pub state: String,
 }
 
+/// Every action reqeust is assigned its unique identifier
+type ActionReqId = u128;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 enum FilterOperator {
     Equal,
@@ -159,7 +164,7 @@ enum FilterOperator {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct EventFilter {
+pub struct EventFilter {
     arg_name: String,
     arg_op: FilterOperator,
     arg_value: String,
@@ -169,39 +174,59 @@ struct EventFilter {
 /// This is just a cache since it's all stored in the network.
 type Subscription = BTreeMap<String, Vec<EventFilter>>;
 
-/// We need an structure to keep track of the subscriptions for different SAFEthings
-type ThingsSubscriptions = BTreeMap<String, Subscription>;
+/// Timestamps for events are all kept in nanos elapsed since epoch
+type EventTimestamp = u128;
 
-pub struct SAFEthing<F: 'static, G: 'static>
-where
-    F: Fn(&str, &str, &str),
-    G: Fn(u128, &str, &str, &str, &[&str]),
-{
+/// The type of data to keep for any new subscriptions registered by the SAFEthing
+type ThingSubscription = (Subscription, EventTimestamp);
+
+/// We need an structure to keep track of the subscriptions for different SAFEthings.
+/// This is a map from a SAFEthing ID to (Subscription info, timestamp of last check).
+type ThingsSubscriptions = BTreeMap<String, ThingSubscription>;
+
+/// Everytime a new event is emitted for any topic the SAFEthing has subscribed to,
+/// the framework will invoke the registered callback function.
+/// The following arguments are passed to the callback function:
+/// thing_id: the SAFEthing id which emitted the event
+/// topic: the corresponding topic the event belongs to
+/// data: any data provided by the event emitter with the event
+/// timestamp: event timestamp as registered by the event emitter
+type SubsNotifCallback =
+    Fn(&str, &str, &str, EventTimestamp) + std::marker::Send + std::marker::Sync;
+
+/// When an action request is received for any of the published supported actions, the framework
+/// will invoke a callback function for the SAFEthing can act upon it.
+/// The following arguments are passed to the callback function:
+/// request_id: an unique identifier for the action request
+/// thing_id: identifier of the SAFEthing sending the action request
+/// action: the name of the action
+/// args: the list of arguments provided for the action
+type ActionReqCallback =
+    Fn(ActionReqId, &str, &str, &[&str]) + std::marker::Send + std::marker::Sync;
+
+pub struct SAFEthing {
     pub thing_id: String,
     auth_uri: String,
     safe_thing_comm: SAFEthingComm,
     subscriptions: ThingsSubscriptions,
-    notifs_cb: &'static F,
-    action_req_cb: &'static G,
+    subsc_thread_channel_tx: Option<Sender<(String, ThingSubscription)>>,
+    notifs_cb: &'static SubsNotifCallback,
+    action_req_cb: &'static ActionReqCallback,
 }
 
-impl<F, G> SAFEthing<F, G>
-where
-    F: Fn(&str, &str, &str) + std::marker::Send + std::marker::Sync,
-    G: Fn(u128, &str, &str, &str, &[&str]) + std::marker::Send + std::marker::Sync,
-{
+impl SAFEthing {
     /// The thing id shall be an opaque string, and the auth URI shall not contain any
     /// scheme/protocol (i.e. without 'safe-...:' prefix) but just the encoded authorisation
     pub fn new(
         thing_id: &str,
         auth_uri: &str,
-        notifs_cb: &'static F,
-        action_req_cb: &'static G,
-    ) -> ResultReturn<SAFEthing<F, G>> {
+        notifs_cb: &'static SubsNotifCallback,
+        action_req_cb: &'static ActionReqCallback,
+    ) -> ResultReturn<SAFEthing> {
         env_logger::init();
         if thing_id.len() < THING_ID_MIN_LENGTH {
             return Err(Error::new(
-                ErrorCode::InvalidParameters,
+                ErrorCode::InvalidArgument,
                 format!(
                     "SAFEthing ID must be at least {} bytes long",
                     THING_ID_MIN_LENGTH
@@ -215,6 +240,7 @@ where
             auth_uri: auth_uri.to_string(),
             safe_thing_comm: SAFEthingComm::new(thing_id, auth_uri)?,
             subscriptions: ThingsSubscriptions::default(),
+            subsc_thread_channel_tx: None,
             notifs_cb: notifs_cb,
             action_req_cb: action_req_cb,
         };
@@ -255,108 +281,30 @@ where
 
         // We read the subscriptions from the network as this could have been a device
         // which was restarted and we need to catch up with any pending notifs.
-        // `notifs_cb` will be used for notifications
         let subscriptions_str = self.safe_thing_comm.get_subscriptions()?;
         self.subscriptions = serde_json::from_str(&subscriptions_str).unwrap();
 
-        // TODO: create channel to notify to the subscriptions manager thread
-        // upon any new subscriptions created by the thing:
-        // let (tx, rx): (Sender<&str>, Receiver<&str>) = mpsc::channel();
+        // Create a channel to notify the subscriptions monitoring thread
+        // upon any new subscriptions created by the SAFEthing
+        let (tx, rx): (
+            Sender<(String, ThingSubscription)>,
+            Receiver<(String, ThingSubscription)>,
+        ) = mpsc::channel();
+        self.subsc_thread_channel_tx = Some(tx);
 
-        let mut threads = vec![];
         // Spawn thread in charge of checking subscriptions
-        // and sending the notifications
-        let subscriptions = self.subscriptions.clone();
-        let notifs_cb: &'static F = self.notifs_cb;
+        // and notifying the SAFEthing by invoking the callback
         // TODO: share self.safething_comm among threads?
         let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
-        threads.push(thread::spawn(move || {
-            loop {
-                trace!("Checking subscriptions...");
-                for (thing_id, subs) in subscriptions.iter() {
-                    for (topic, _filter) in subs.iter() {
-                        trace!(
-                            "CHECKING EVENTS FROM (thingId -> topic): {} -> {}",
-                            thing_id,
-                            topic
-                        );
-
-                        let events = safething_comm
-                            .get_thing_topic_events(thing_id, topic)
-                            .unwrap();
-                        let events_vec: Vec<String> = match serde_json::from_str(&events) {
-                            Ok(vec) => vec,
-                            Err(_) => vec![],
-                        };
-                        for event in events_vec.iter() {
-                            debug!("Event occurred for topic: {}, event: {}", topic, event);
-                            (notifs_cb)(thing_id.as_str(), topic.as_str(), event.as_str());
-                            // TODO: keep track of the events that were already notified
-                        }
-                    }
-                }
-
-                trace!("CHECKED SUBSCRIPTIONS....WAIT FOR NEXT LOOP");
-                thread::sleep(Duration::from_millis(SUBSCRIPTIONS_CHECK_FREQ));
-            }
-        }));
+        let notifs_cb: &'static SubsNotifCallback = self.notifs_cb;
+        spawn_check_subsc_thread(safething_comm, notifs_cb, self.subscriptions.clone(), rx);
 
         // Spawn thread in charge of checking for action requests
-        // and invoking the corresponding function
-        let action_req_cb: &'static G = self.action_req_cb;
+        // and invoking the corresponding callback function
         // TODO: share self.safething_comm among threads?
         let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
-        threads.push(thread::spawn(move || {
-            loop {
-                trace!("Checking for new action requests...");
-                let actions_reqs_vec = safething_comm.get_actions_requests().unwrap();
-                trace!("Actions requested to process: {:?}", actions_reqs_vec);
-                for (request_id, action_req_str) in actions_reqs_vec.iter() {
-                    match serde_json::from_str(&action_req_str) {
-                        Ok(ActionReq {
-                            thing_id,
-                            action,
-                            args,
-                            state,
-                        }) => {
-                            if state == ACTION_REQUEST_INIT_STATE {
-                                debug!("Action requested: {:?}", action);
-                                let args2 = args.clone();
-                                let action_args: Vec<&str> =
-                                    args.iter().map(|i| i.as_str()).collect();
-                                (action_req_cb)(
-                                    *request_id,
-                                    state.as_str(),
-                                    thing_id.as_str(),
-                                    action.as_str(),
-                                    &action_args,
-                                );
-                                debug!(
-                                    "Action request handled by SAFEthing. Updating new state to {}",
-                                    ACTION_REQUEST_DONE_STATE
-                                );
-                                let action_req = ActionReq {
-                                    thing_id,
-                                    action,
-                                    args: args2,
-                                    state: ACTION_REQUEST_DONE_STATE.to_string(),
-                                };
-                                let action_req_str: String =
-                                    serde_json::to_string(&action_req).unwrap();
-                                safething_comm
-                                    .set_action_request_state(*request_id, action_req_str.as_str())
-                                    .expect("Failed to update action request state");
-                            }
-                        }
-                        Err(err) => error!("Action request is invalid, thus ignoring it: {}", err),
-                    };
-
-                    // TODO: keep track of the actions requests that were already notified
-                }
-                trace!("CHECKED ACTIONS....WAIT FOR NEXT LOOP");
-                thread::sleep(Duration::from_millis(ACTION_REQUEST_CHECK_FREQ));
-            }
-        }));
+        let action_req_cb: &'static ActionReqCallback = self.action_req_cb;
+        spawn_check_new_action_reqs(safething_comm, action_req_cb);
 
         info!("SAFEthing Connected with ID: {}", self.thing_id);
         Ok(())
@@ -407,21 +355,43 @@ where
 
     /// Subscribe to topics published by a SAFEthing (all data is stored in the network to support device resets/reboots)
     /// Eventually this can support filters
-    pub fn subscribe(&mut self, thing_id: &str, topic: &str /*, filter*/) -> ResultReturn<()> {
+    pub fn subscribe(
+        &mut self,
+        thing_id: &str,
+        topic: &str,
+        filters: &[EventFilter],
+    ) -> ResultReturn<()> {
         // TODO: check if thing is 'Published' before subscribing,
         // and also check if it supports the topic
 
-        // We keep track of the suscriptions list in memory first
-        self.subscriptions
-            .entry(String::from(thing_id))
-            .or_insert(BTreeMap::new());
-        let thing = String::from(thing_id);
-        self.subscriptions.get_mut(&thing).map(|subs| {
-            let filters: Vec<EventFilter> = vec![];
-            subs.insert(String::from(topic), filters);
-        });
+        // Generate timestamp for monitoring the new subscription
+        let now_timestamp = SystemTime::now();
+        let since_the_epoch = now_timestamp
+            .duration_since(UNIX_EPOCH)
+            .expect("Failed to get time since epoch");
+        let timestamp: EventTimestamp = since_the_epoch.as_nanos();
 
-        // But also store subscriptions list on the network
+        // We keep track of the suscriptions list in memory first
+        let mut subs = BTreeMap::new();
+        let mut f = Vec::new();
+        f.extend(filters.iter().map(|i| i.clone()));
+        subs.insert(topic.to_string(), f);
+        let new_subs = subs.clone();
+        self.subscriptions
+            .insert(thing_id.to_string(), (subs, timestamp));
+
+        // Also notify the thread which is monitoring topics so it starts checking this new one
+        if let Some(tx) = &self.subsc_thread_channel_tx {
+            match tx.send((thing_id.to_string(), (new_subs, timestamp))) {
+                Ok(()) => trace!("New subscription notified to monitoring thread"),
+                Err(err) => error!(
+                    "Failed to notify new subscription to monitoring thread: {}",
+                    err
+                ),
+            };
+        }
+
+        // But also update subscriptions list on the network
         let subscriptions_str: String = serde_json::to_string(&self.subscriptions).unwrap();
         self.safe_thing_comm
             .set_subscriptions(subscriptions_str.as_str())?;
@@ -434,11 +404,16 @@ where
     pub fn notify(&mut self, topic: &str, data: &str) -> ResultReturn<()> {
         info!("Notifying event for topic: {}, data: {}", topic, data);
         let events: String = self.safe_thing_comm.get_topic_events(topic)?;
-        let mut events_vec: Vec<String> = match serde_json::from_str(&events) {
+        let mut events_vec: Vec<(EventTimestamp, String)> = match serde_json::from_str(&events) {
             Ok(vec) => vec,
             Err(_) => vec![],
         };
-        events_vec.push(data.to_string());
+        let now_timestamp = SystemTime::now();
+        let since_the_epoch = now_timestamp
+            .duration_since(UNIX_EPOCH)
+            .expect("Failed to get time since epoch");
+        let timestamp: EventTimestamp = since_the_epoch.as_nanos();
+        events_vec.push((timestamp, data.to_string()));
         let events_str: String = serde_json::to_string(&events_vec).unwrap();
         self.safe_thing_comm
             .set_topic_events(topic, events_str.as_str())?;
@@ -453,7 +428,7 @@ where
         action: &str,
         args: &[&str],
         cb: &'static (Fn(&str) -> bool + std::marker::Send + std::marker::Sync),
-    ) -> ResultReturn<u128> {
+    ) -> ResultReturn<ActionReqId> {
         let mut args_vec = Vec::new();
         args_vec.extend(args.iter().map(|&i| i.to_string()));
         let action_req = ActionReq {
@@ -470,7 +445,7 @@ where
 
         // TODO: share self.safething_comm among threads?
         let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
-        spawn_monitoring_thread(thing_id.to_string(), req_id, safething_comm, cb);
+        spawn_action_req_monitoring_thread(thing_id.to_string(), req_id, safething_comm, cb);
 
         Ok(req_id)
     }
@@ -478,7 +453,7 @@ where
     /// Update the state of an action reqeust
     pub fn update_action_request_state(
         &self,
-        request_id: u128,
+        request_id: ActionReqId,
         new_state: &str,
     ) -> ResultReturn<()> {
         self.safe_thing_comm
@@ -492,9 +467,122 @@ where
     }
 }
 
-fn spawn_monitoring_thread(
+// spawn a thread which takes care of monitoring topics which the SAFEthing subcribed to
+fn spawn_check_subsc_thread(
+    safething_comm: SAFEthingComm,
+    notifs_cb: &'static SubsNotifCallback,
+    subs: ThingsSubscriptions,
+    subsc_thread_channel_rx: Receiver<(String, ThingSubscription)>,
+) {
+    thread::spawn(move || {
+        let mut subscriptions = subs.clone();
+        loop {
+            trace!("Checking subscriptions...");
+
+            for (thing_id, subs) in subsc_thread_channel_rx.try_iter() {
+                println!("New subscription to monitor: {}", thing_id);
+                subscriptions.insert(thing_id, subs);
+            }
+
+            for (thing_id, (subs, _timestamp)) in subscriptions.iter() {
+                for (topic, _filter) in subs.iter() {
+                    trace!(
+                        "CHECKING EVENTS FROM (thingId -> topic): {} -> {}",
+                        thing_id,
+                        topic
+                    );
+
+                    let events = safething_comm
+                        .get_thing_topic_events(thing_id, topic)
+                        .unwrap();
+                    let events_vec: Vec<(EventTimestamp, String)> =
+                        match serde_json::from_str(&events) {
+                            Ok(vec) => vec,
+                            Err(_) => vec![],
+                        };
+                    for (timestamp, event) in events_vec.iter() {
+                        debug!(
+                            "Event occurred for topic: {}, event: ({}, {})",
+                            topic, timestamp, event
+                        );
+                        (notifs_cb)(
+                            thing_id.as_str(),
+                            topic.as_str(),
+                            event.as_str(),
+                            *timestamp,
+                        );
+
+                        // TODO: keep track of the events that were already notified based on timestamp
+                    }
+                }
+            }
+
+            trace!("CHECKED SUBSCRIPTIONS....WAIT FOR NEXT LOOP");
+            thread::sleep(Duration::from_millis(SUBSCRIPTIONS_CHECK_FREQ));
+        }
+    });
+}
+
+// spawn a thread which takes care of monitoring for new action requests received
+fn spawn_check_new_action_reqs(
+    safething_comm: SAFEthingComm,
+    action_req_cb: &'static ActionReqCallback,
+) {
+    thread::spawn(move || {
+        loop {
+            trace!("Checking for new action requests...");
+            let actions_reqs_vec = safething_comm.get_actions_requests().unwrap();
+            trace!("Actions requested to process: {:?}", actions_reqs_vec);
+            for (request_id, action_req_str) in actions_reqs_vec.iter() {
+                match serde_json::from_str(&action_req_str) {
+                    Ok(ActionReq {
+                        thing_id,
+                        action,
+                        args,
+                        state,
+                    }) => {
+                        if state == ACTION_REQUEST_INIT_STATE {
+                            debug!("Action requested: {:?}", action);
+                            let args2 = args.clone();
+                            let action_args: Vec<&str> = args.iter().map(|i| i.as_str()).collect();
+                            (action_req_cb)(
+                                *request_id,
+                                thing_id.as_str(),
+                                action.as_str(),
+                                &action_args,
+                            );
+                            debug!(
+                                "Action request handled by SAFEthing. Updating new state to {}",
+                                ACTION_REQUEST_DONE_STATE
+                            );
+                            let action_req = ActionReq {
+                                thing_id,
+                                action,
+                                args: args2,
+                                state: ACTION_REQUEST_DONE_STATE.to_string(),
+                            };
+                            let action_req_str: String =
+                                serde_json::to_string(&action_req).unwrap();
+                            safething_comm
+                                .set_action_request_state(*request_id, action_req_str.as_str())
+                                .expect("Failed to update action request state");
+                        }
+                    }
+                    Err(err) => error!("Action request is invalid, thus ignoring it: {}", err),
+                };
+
+                // TODO: keep track of the actions requests that were already notified
+            }
+            trace!("CHECKED ACTIONS....WAIT FOR NEXT LOOP");
+            thread::sleep(Duration::from_millis(ACTION_REQUEST_CHECK_FREQ));
+        }
+    });
+}
+
+// spawn a thread to check for a change in the state of an action request sent
+fn spawn_action_req_monitoring_thread(
     thing_id: String,
-    request_id: u128,
+    request_id: ActionReqId,
     safething_comm: SAFEthingComm,
     cb: &'static (Fn(&str) -> bool + std::marker::Send + std::marker::Sync),
 ) {

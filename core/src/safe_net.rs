@@ -141,7 +141,7 @@ impl SAFENet {
                 }
             }
             Err(e) => Err(Error::new(
-                ErrorCode::InvalidParameters,
+                ErrorCode::InvalidArgument,
                 format!("Failed decoding the auth URI provided: {:?}", e).as_str(),
             )),
         }

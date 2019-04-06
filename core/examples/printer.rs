@@ -21,28 +21,22 @@ use safe_thing::{AccessType, ActionDef, SAFEthing, ThingAttr, Topic};
 use std::thread;
 use std::time::Duration;
 
-fn subscriptions_notif(thing_id: &str, topic: &str, data: &str) {
+fn subscriptions_notif(thing_id: &str, topic: &str, data: &str, timestamp: u128) {
     println!(
-        "New event: Notification received from thing_id: {}, topic: {}, data: {}",
-        thing_id, topic, data
+        "New event: Notification received from thing_id: '{}', topic: '{}', data: '{}', timestamp: {}",
+        thing_id, topic, data, timestamp
     )
 }
 
-fn action_request_notif(
-    request_id: u128,
-    state: &str,
-    thing_id: &str,
-    action: &str,
-    args: &[&str],
-) {
+fn action_request_notif(request_id: u128, thing_id: &str, action: &str, args: &[&str]) {
     println!(
-        "New action: Action request received, id: '{}', state: '{}', from thing_id: '{}', action: '{}', args: {:?}",
-        request_id, state, thing_id, action, args
+        "New action: Action request received, id: '{}', from thing_id: '{}', action: '{}', args: {:?}",
+        request_id, thing_id, action, args
     );
 }
 
 fn handle_print_req_state(state: &str) -> bool {
-    println!("Print action request new state: {}", state);
+    println!("Print action request new state: '{}'", state);
 
     true // keep monitoring the state until it's "Done"
 }
@@ -119,15 +113,20 @@ pub fn main() {
     // Let's now make it active and ready for receiving action requests
     safe_thing.publish().expect("Failed to publish SAFEthing");
 
-    /****** this shall be part of a printer_consumer app *****
+    // ***** this shall be part of a printer_consumer app *****
     // for testing as it probably doesn't make sense
     // to subscribe to its own events
     safe_thing
-        .subscribe(&id, "printRequested")
+        .subscribe(&id, "printRequested", &[])
         .expect("Failed to subscribe to a topic");
-    */
 
-    let req_id = safe_thing
+    thread::sleep(Duration::from_millis(6000));
+    println!("SENDING NOTIFICATION");
+    let _ = safe_thing.notify("printRequested", "print job started");
+    println!("NOTIFICATION SENT");
+    thread::sleep(Duration::from_millis(20000));
+
+    /*let req_id = safe_thing
         .action_request(
             &id,
             "print",
@@ -135,7 +134,7 @@ pub fn main() {
             &handle_print_req_state,
         )
         .expect("Failed to send 'print' action request");
-    println!("Action request sent, id: '{}'", req_id);
+    println!("Action request sent, id: '{}'", req_id);*/
     /***** END printer_consumer *************/
 
     // Let's just wait for any request sent,

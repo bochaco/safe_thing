@@ -46,6 +46,8 @@ As an example, the temperature sensor can expose a "temperature change" topic th
 
 When subscribing to a topic, a set of filters can optionally be provided in order to reduce the notifications to be received to just those which the subscriber is really interested in. E.g. a SAFEthing might be interested in being notified only if the current temperature goes over a threshold.
 
+TODO: subscriptions to dynamic attributes vs. topics events
+
 TODO: describe subscriptions and notifications filters & parameters
 
 #### Actions
