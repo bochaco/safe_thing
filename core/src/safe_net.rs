@@ -125,7 +125,7 @@ impl SAFENet {
 
         match SAFENetHelpers::decode_ipc_msg(&uri) {
             Ok(auth_granted) => {
-                match App::registered(String::from(app_id), auth_granted, disconnect_cb) {
+                match App::registered(app_id.to_string(), auth_granted, disconnect_cb) {
                     Ok(app) => {
                         self.safe_app = Some(app);
                         self.conn_status = ConnStatus::Connected;

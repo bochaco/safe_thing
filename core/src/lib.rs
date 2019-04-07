@@ -97,24 +97,27 @@ pub struct Topic {
 impl Topic {
     pub fn new(name: &str, access: AccessType) -> Topic {
         Topic {
-            name: String::from(name),
+            name: name.to_string(),
             access: access,
         }
     }
 }
 
 /// This is the structure which defines the attributes of a SAFEthing
+/// SAFEthings can subscribe for notifications upon changes detected on dynamic attributes
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ThingAttr {
     pub attr: String,
     pub value: String,
+    pub is_dynamic: bool,
 }
 
 impl ThingAttr {
-    pub fn new(attr: &str, value: &str) -> ThingAttr {
+    pub fn new(attr: &str, value: &str, is_dynamic: bool) -> ThingAttr {
         ThingAttr {
-            attr: String::from(attr),
-            value: String::from(value),
+            attr: attr.to_string(),
+            value: value.to_string(),
+            is_dynamic,
         }
     }
 }
@@ -124,25 +127,22 @@ impl ThingAttr {
 pub struct ActionDef {
     pub name: String,
     pub access: AccessType,
-    pub args: ActionArgs,
+    pub params: Vec<String>,
 }
 
-// TODO: change to Vec<&'static str>
-pub type ActionArgs = Vec<String>; // the values are opaque for the framework
-
 impl ActionDef {
-    pub fn new(name: &str, access: AccessType, args: &[&str]) -> ActionDef {
-        let mut arguments = vec![];
-        for arg in args {
-            arguments.push(String::from(*arg));
-        }
+    pub fn new(name: &str, access: AccessType, params: &[&str]) -> ActionDef {
+        let mut parameters = vec![];
+        parameters.extend(params.iter().map(|&p| p.to_string()));
         ActionDef {
-            name: String::from(name),
+            name: name.to_string(),
             access: access,
-            args: arguments,
+            params: parameters,
         }
     }
 }
+
+pub type ActionArgs = Vec<String>; // the values are opaque for the framework
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ActionReq {
@@ -152,11 +152,8 @@ struct ActionReq {
     pub state: String,
 }
 
-/// Every action reqeust is assigned its unique identifier
-type ActionReqId = u128;
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
-enum FilterOperator {
+pub enum FilterOperator {
     Equal,
     NotEqual,
     LessThan,
@@ -164,25 +161,37 @@ enum FilterOperator {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct EventFilter {
+struct Filter {
     arg_name: String,
-    arg_op: FilterOperator,
-    arg_value: String,
+    filter_op: FilterOperator,
+    filter_value: String,
 }
 
-/// A subscription is a map from Topic to a list of filters.
-/// This is just a cache since it's all stored in the network.
-type Subscription = BTreeMap<String, Vec<EventFilter>>;
+/// A topic subscription is a map from a topic name to a list of filters.
+type TopicSubscription = BTreeMap<String, Vec<Filter>>;
+
+/// An attribute subscription is simply a list of filters.
+type AttrSubscription = Vec<Filter>;
+
+/// Each subscription can either be for a specific topic or for a dynamic attribute.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+enum Subscription {
+    Topic(TopicSubscription),
+    Attr(AttrSubscription),
+}
 
 /// Timestamps for events are all kept in nanos elapsed since epoch
-type EventTimestamp = u128;
+type Timestamp = u128;
 
-/// The type of data to keep for any new subscriptions registered by the SAFEthing
-type ThingSubscription = (Subscription, EventTimestamp);
+/// Several subscriptions can be registered for a remote SAFEthing.
+/// We also keep track of the last time we checked the remote thing for any new event or
+/// change in the value of an attr we should be monitoring
+type ThingSubscriptions = Vec<(Subscription, Timestamp)>;
 
 /// We need an structure to keep track of the subscriptions for different SAFEthings.
-/// This is a map from a SAFEthing ID to (Subscription info, timestamp of last check).
-type ThingsSubscriptions = BTreeMap<String, ThingSubscription>;
+/// This is a map from a SAFEthing ID to a list of subscriptions.
+/// This is just an in memory cache since it's all stored on the network.
+type RegisteredSubscriptions = BTreeMap<String, ThingSubscriptions>;
 
 /// Everytime a new event is emitted for any topic the SAFEthing has subscribed to,
 /// the framework will invoke the registered callback function.
@@ -191,8 +200,10 @@ type ThingsSubscriptions = BTreeMap<String, ThingSubscription>;
 /// topic: the corresponding topic the event belongs to
 /// data: any data provided by the event emitter with the event
 /// timestamp: event timestamp as registered by the event emitter
-type SubsNotifCallback =
-    Fn(&str, &str, &str, EventTimestamp) + std::marker::Send + std::marker::Sync;
+type SubsNotifCallback = Fn(&str, &str, &str, Timestamp) + std::marker::Send + std::marker::Sync;
+
+/// Every action reqeust is assigned its unique identifier
+type ActionReqId = u128;
 
 /// When an action request is received for any of the published supported actions, the framework
 /// will invoke a callback function for the SAFEthing can act upon it.
@@ -208,8 +219,8 @@ pub struct SAFEthing {
     pub thing_id: String,
     auth_uri: String,
     safe_thing_comm: SAFEthingComm,
-    subscriptions: ThingsSubscriptions,
-    subsc_thread_channel_tx: Option<Sender<(String, ThingSubscription)>>,
+    subscriptions: RegisteredSubscriptions,
+    subsc_thread_channel_tx: Option<Sender<(String, ThingSubscriptions)>>,
     notifs_cb: &'static SubsNotifCallback,
     action_req_cb: &'static ActionReqCallback,
 }
@@ -239,7 +250,7 @@ impl SAFEthing {
             thing_id: thing_id.to_string(),
             auth_uri: auth_uri.to_string(),
             safe_thing_comm: SAFEthingComm::new(thing_id, auth_uri)?,
-            subscriptions: ThingsSubscriptions::default(),
+            subscriptions: RegisteredSubscriptions::default(),
             subsc_thread_channel_tx: None,
             notifs_cb: notifs_cb,
             action_req_cb: action_req_cb,
@@ -287,8 +298,8 @@ impl SAFEthing {
         // Create a channel to notify the subscriptions monitoring thread
         // upon any new subscriptions created by the SAFEthing
         let (tx, rx): (
-            Sender<(String, ThingSubscription)>,
-            Receiver<(String, ThingSubscription)>,
+            Sender<(String, ThingSubscriptions)>,
+            Receiver<(String, ThingSubscriptions)>,
         ) = mpsc::channel();
         self.subsc_thread_channel_tx = Some(tx);
 
@@ -354,12 +365,55 @@ impl SAFEthing {
     }
 
     /// Subscribe to topics published by a SAFEthing (all data is stored in the network to support device resets/reboots)
-    /// Eventually this can support filters
-    pub fn subscribe(
+    pub fn subscribe_to_topic(
         &mut self,
         thing_id: &str,
         topic: &str,
-        filters: &[EventFilter],
+        filters: &[(&str, FilterOperator, &str)],
+    ) -> ResultReturn<()> {
+        // TODO: check if thing is 'Published' before subscribing,
+        // and also check if it supports the topic
+
+        // We keep track of the suscriptions list in memory first
+        let mut filters_vec = Vec::new();
+        filters_vec.extend(filters.iter().map(|f| Filter {
+            arg_name: f.0.to_string(),
+            filter_op: f.1.clone(),
+            filter_value: f.2.to_string(),
+        }));
+
+        let mut topic_subs: TopicSubscription = BTreeMap::new();
+        topic_subs.insert(topic.to_string(), filters_vec);
+
+        self.register_new_subscription(thing_id, Subscription::Topic(topic_subs))
+    }
+
+    /// Subscribe to a dynamic attribute published by a SAFEthing in order to receive notifications
+    /// upon changes detected on them and based on the filters provided
+    pub fn subscribe_to_attr(
+        &mut self,
+        thing_id: &str,
+        filters: &[(&str, FilterOperator, &str)],
+    ) -> ResultReturn<()> {
+        // TODO: check if thing is 'Published' before subscribing,
+        // and also check if the attribute is dynamic
+
+        // We keep track of the suscriptions list in memory first
+        let mut attr_subs: AttrSubscription = Vec::new();
+        attr_subs.extend(filters.iter().map(|f| Filter {
+            arg_name: f.0.to_string(),
+            filter_op: f.1.clone(),
+            filter_value: f.2.to_string(),
+        }));
+
+        self.register_new_subscription(thing_id, Subscription::Attr(attr_subs))
+    }
+
+    // private helper
+    fn register_new_subscription(
+        &mut self,
+        thing_id: &str,
+        subscription: Subscription,
     ) -> ResultReturn<()> {
         // TODO: check if thing is 'Published' before subscribing,
         // and also check if it supports the topic
@@ -369,20 +423,20 @@ impl SAFEthing {
         let since_the_epoch = now_timestamp
             .duration_since(UNIX_EPOCH)
             .expect("Failed to get time since epoch");
-        let timestamp: EventTimestamp = since_the_epoch.as_nanos();
+        let timestamp: Timestamp = since_the_epoch.as_nanos();
 
         // We keep track of the suscriptions list in memory first
-        let mut subs = BTreeMap::new();
-        let mut f = Vec::new();
-        f.extend(filters.iter().map(|i| i.clone()));
-        subs.insert(topic.to_string(), f);
-        let new_subs = subs.clone();
-        self.subscriptions
-            .insert(thing_id.to_string(), (subs, timestamp));
+        let mut thing_subs = match self.subscriptions.get(thing_id) {
+            Some(subs) => subs.clone(),
+            None => vec![],
+        };
+        thing_subs.push((subscription, timestamp));
+        let thing_subs_clone = thing_subs.clone();
+        self.subscriptions.insert(thing_id.to_string(), thing_subs);
 
         // Also notify the thread which is monitoring topics so it starts checking this new one
         if let Some(tx) = &self.subsc_thread_channel_tx {
-            match tx.send((thing_id.to_string(), (new_subs, timestamp))) {
+            match tx.send((thing_id.to_string(), thing_subs_clone)) {
                 Ok(()) => trace!("New subscription notified to monitoring thread"),
                 Err(err) => error!(
                     "Failed to notify new subscription to monitoring thread: {}",
@@ -404,7 +458,7 @@ impl SAFEthing {
     pub fn notify(&mut self, topic: &str, data: &str) -> ResultReturn<()> {
         info!("Notifying event for topic: {}, data: {}", topic, data);
         let events: String = self.safe_thing_comm.get_topic_events(topic)?;
-        let mut events_vec: Vec<(EventTimestamp, String)> = match serde_json::from_str(&events) {
+        let mut events_vec: Vec<(Timestamp, String)> = match serde_json::from_str(&events) {
             Ok(vec) => vec,
             Err(_) => vec![],
         };
@@ -412,7 +466,7 @@ impl SAFEthing {
         let since_the_epoch = now_timestamp
             .duration_since(UNIX_EPOCH)
             .expect("Failed to get time since epoch");
-        let timestamp: EventTimestamp = since_the_epoch.as_nanos();
+        let timestamp: Timestamp = since_the_epoch.as_nanos();
         events_vec.push((timestamp, data.to_string()));
         let events_str: String = serde_json::to_string(&events_vec).unwrap();
         self.safe_thing_comm
@@ -430,7 +484,7 @@ impl SAFEthing {
         cb: &'static (Fn(&str) -> bool + std::marker::Send + std::marker::Sync),
     ) -> ResultReturn<ActionReqId> {
         let mut args_vec = Vec::new();
-        args_vec.extend(args.iter().map(|&i| i.to_string()));
+        args_vec.extend(args.iter().map(|&arg| arg.to_string()));
         let action_req = ActionReq {
             thing_id: thing_id.to_string(),
             action: action.to_string(),
@@ -471,48 +525,88 @@ impl SAFEthing {
 fn spawn_check_subsc_thread(
     safething_comm: SAFEthingComm,
     notifs_cb: &'static SubsNotifCallback,
-    subs: ThingsSubscriptions,
-    subsc_thread_channel_rx: Receiver<(String, ThingSubscription)>,
+    subs: RegisteredSubscriptions,
+    subsc_thread_channel_rx: Receiver<(String, ThingSubscriptions)>,
 ) {
     thread::spawn(move || {
         let mut subscriptions = subs.clone();
         loop {
             trace!("Checking subscriptions...");
 
-            for (thing_id, subs) in subsc_thread_channel_rx.try_iter() {
-                println!("New subscription to monitor: {}", thing_id);
-                subscriptions.insert(thing_id, subs);
+            for (thing_id, thing_subscription) in subsc_thread_channel_rx.try_iter() {
+                debug!("New subscription to monitor: {}", thing_id);
+                subscriptions.insert(thing_id, thing_subscription);
             }
 
-            for (thing_id, (subs, _timestamp)) in subscriptions.iter() {
-                for (topic, _filter) in subs.iter() {
-                    trace!(
-                        "CHECKING EVENTS FROM (thingId -> topic): {} -> {}",
-                        thing_id,
-                        topic
-                    );
+            for (thing_id, thing_subs) in subscriptions.iter() {
+                for (subscription, _timestamp) in thing_subs.iter() {
+                    match subscription {
+                        Subscription::Topic(topic_subs) => {
+                            for (topic, _filters) in topic_subs {
+                                trace!(
+                                    "CHECKING TOPIC EVENTS FROM (thingId -> topic): {} -> {}",
+                                    thing_id,
+                                    topic
+                                );
 
-                    let events = safething_comm
-                        .get_thing_topic_events(thing_id, topic)
-                        .unwrap();
-                    let events_vec: Vec<(EventTimestamp, String)> =
-                        match serde_json::from_str(&events) {
-                            Ok(vec) => vec,
-                            Err(_) => vec![],
-                        };
-                    for (timestamp, event) in events_vec.iter() {
-                        debug!(
-                            "Event occurred for topic: {}, event: ({}, {})",
-                            topic, timestamp, event
-                        );
-                        (notifs_cb)(
-                            thing_id.as_str(),
-                            topic.as_str(),
-                            event.as_str(),
-                            *timestamp,
-                        );
+                                let events = safething_comm
+                                    .get_thing_topic_events(thing_id, topic)
+                                    .unwrap();
+                                let events_vec: Vec<(Timestamp, String)> =
+                                    match serde_json::from_str(&events) {
+                                        Ok(vec) => vec,
+                                        Err(_) => vec![],
+                                    };
+                                for (timestamp, event) in events_vec.iter() {
+                                    debug!(
+                                        "Event occurred for topic: {}, event: ({}, {})",
+                                        topic, timestamp, event
+                                    );
+                                    (notifs_cb)(
+                                        thing_id.as_str(),
+                                        topic.as_str(),
+                                        event.as_str(),
+                                        *timestamp,
+                                    );
 
-                        // TODO: keep track of the events that were already notified based on timestamp
+                                    // TODO: keep track of the events that were already notified based on timestamp
+                                }
+                            }
+                        }
+                        Subscription::Attr(attr_subs) => {
+                            for filter in attr_subs {
+                                trace!(
+                                    "CHECKING DYNAMIC ATTRIBUTES CHANGES FROM thingId: {} - {:?}",
+                                    thing_id,
+                                    filter
+                                );
+
+                                let attrs = safething_comm.get_thing_attrs(thing_id).unwrap();
+                                let attrs_vec: Vec<ThingAttr> = match serde_json::from_str(&attrs) {
+                                    Ok(vec) => vec,
+                                    Err(_) => vec![],
+                                };
+                                for ThingAttr {
+                                    attr,
+                                    value,
+                                    is_dynamic,
+                                } in attrs_vec
+                                {
+                                    if is_dynamic {
+                                        debug!(
+                                            "Dynamic attribute change occurred: {}, value: {}",
+                                            attr, value
+                                        );
+                                        (notifs_cb)(
+                                            thing_id.as_str(),
+                                            attr.as_str(),
+                                            value.as_str(),
+                                            0,
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
