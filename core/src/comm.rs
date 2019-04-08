@@ -17,6 +17,8 @@
 
 extern crate safe_core;
 
+use log::debug;
+
 use errors::{Error, ErrorCode, ResultReturn};
 
 // Functions to access the SAFE Network
@@ -49,16 +51,39 @@ pub enum ThingStatus {
 pub struct SAFEthingComm {
     thing_id: String,
     safe_net: SAFENet,
+    auth_str: String,
     thing_mdata: MutableData,
     xor_name: XorNameArray,
 }
 
 impl SAFEthingComm {
-    pub fn new(thing_id: &str, auth_uri: &str) -> ResultReturn<SAFEthingComm> {
-        let safe_thing_comm = SAFEthingComm {
-            thing_id: String::from(thing_id),
+    pub fn clone(&self) -> ResultReturn<SAFEthingComm> {
+        let safething_comm = SAFEthingComm {
+            thing_id: self.thing_id.clone(),
             /// TODO: pass a callback function for disconnection notif to reconnect
-            safe_net: SAFENet::connect(thing_id, auth_uri)?, // Connect to the SAFE Network using the auth URI
+            safe_net: SAFENet::connect(&self.thing_id, &self.auth_str)?, // Connect to the SAFE Network using the auth URI
+            auth_str: self.auth_str.clone(),
+            thing_mdata: self.thing_mdata.clone(),
+            xor_name: self.xor_name.clone(),
+        };
+
+        Ok(safething_comm)
+    }
+
+    pub fn new(thing_id: &str, auth_uri: &str) -> ResultReturn<SAFEthingComm> {
+        let auth_str: String = if auth_uri.is_empty() {
+            debug!("Authorising SAFEthing app with safe_auth webservice...");
+            SAFENet::gen_auth_request(thing_id)?
+        } else {
+            debug!("Using the provided authorisation credentials to connect...");
+            auth_uri.to_string()
+        };
+
+        let safe_thing_comm = SAFEthingComm {
+            thing_id: thing_id.to_string(),
+            /// TODO: pass a callback function for disconnection notif to reconnect
+            safe_net: SAFENet::connect(thing_id, &auth_str)?, // Connect to the SAFE Network using the auth URI
+            auth_str,
             thing_mdata: Default::default(),
             xor_name: Default::default(),
         };

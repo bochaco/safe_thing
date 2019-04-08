@@ -46,7 +46,13 @@ use self::safe_core::ffi::MDataInfo;
 //use self::safe_core::ffi::arrays::{SymSecretKey, SymNonce};
 use self::ffi_utils::test_utils::{call_0, call_1 /*, call_vec*/, call_vec_u8};
 use self::safe_core::ffi::ipc::req::PermissionSet;
+#[cfg(not(feature = "fake-auth"))]
+use self::safe_core::ipc::{AppExchangeInfo, AuthReq, IpcReq};
 
+#[cfg(not(feature = "fake-auth"))]
+use std::collections::HashMap;
+#[cfg(not(feature = "fake-auth"))]
+use std::io::Read;
 use std::{fmt, str};
 
 use errors::{Error, ErrorCode, ResultReturn};
@@ -56,8 +62,13 @@ use errors::{Error, ErrorCode, ResultReturn};
 const ERR_DATA_EXISTS: i32 = -104;
 const ERR_NO_SUCH_ENTRY: i32 = -106;
 
+// URL where to send a GET request to the authenticator webservice for authorising the SAFE app
+#[cfg(not(feature = "fake-auth"))]
+const SAFE_AUTH_WEBSERVICE_BASE_URL: &str = "http://localhost:41805/authorise/";
+
 use safe_net_helpers as SAFENetHelpers;
 
+#[derive(Clone)]
 pub struct MutableData(MDataInfo);
 
 impl Default for MutableData {
@@ -106,10 +117,51 @@ pub struct SAFENet {
 }
 
 impl SAFENet {
+    // Generate an authorisation request string that can be sent to a SAFE Authenticator
+    #[cfg(not(feature = "fake-auth"))]
+    pub fn gen_auth_request(thing_id: &str) -> ResultReturn<String> {
+        // TODO: allow the caller to provide the name and vendor strings
+        let ipc_req = IpcReq::Auth(AuthReq {
+            app: AppExchangeInfo {
+                id: thing_id.to_string(),
+                scope: None,
+                name: "SAFEthing-".to_string() + thing_id,
+                vendor: "SAFEthing Framework".to_string(),
+            },
+            app_container: false,
+            containers: HashMap::new(),
+        });
+
+        match SAFENetHelpers::encode_ipc_msg(ipc_req) {
+            Ok(auth_req_str) => {
+                trace!(
+                    "Authorisation request generated successfully: {}",
+                    auth_req_str
+                );
+                let authenticator_webservice_url =
+                    SAFE_AUTH_WEBSERVICE_BASE_URL.to_string() + &auth_req_str;
+                let mut res = reqwest::get(&authenticator_webservice_url).unwrap();
+                let mut auth_res = String::new();
+                res.read_to_string(&mut auth_res).unwrap();
+                debug!("Authorisation response: {}", auth_res);
+                Ok(auth_res)
+            }
+            Err(e) => Err(Error::new(
+                ErrorCode::InvalidArgument,
+                format!("Failed encoding the auth URI: {:?}", e).as_str(),
+            )),
+        }
+    }
+
+    #[cfg(feature = "fake-auth")]
+    pub fn gen_auth_request(thing_id: &str) -> ResultReturn<String> {
+        Ok(thing_id.to_string())
+    }
+
     // private helper function
     #[cfg(feature = "fake-auth")]
     fn register(&mut self, _: &str, _: &str) -> ResultReturn<()> {
-        debug!("Using fake authorisation for testing...");
+        warn!("Using fake authorisation for testing...");
         self.safe_app = Some(create_app());
         self.conn_status = ConnStatus::Connected;
         Ok(())

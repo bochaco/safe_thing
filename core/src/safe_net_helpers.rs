@@ -25,15 +25,24 @@ use self::safe_app::ffi::mutable_data::{
     entries::mdata_list_entries, mdata_entries, mdata_get_value,
 };
 use self::safe_app::App;
+#[cfg(not(feature = "fake-auth"))]
+use self::safe_app::AppError;
 use self::safe_core::ffi::MDataInfo;
 #[cfg(not(feature = "fake-auth"))]
 use self::safe_core::ipc::resp::AuthGranted;
 #[cfg(not(feature = "fake-auth"))]
-use self::safe_core::ipc::{decode_msg, IpcError, IpcMsg, IpcResp};
+use self::safe_core::ipc::{decode_msg, encode_msg, gen_req_id, IpcError, IpcMsg, IpcReq, IpcResp};
 use self::safe_core::MDataEntry;
 use std::os::raw::c_void;
 use std::slice;
 use std::sync::mpsc;
+
+#[cfg(not(feature = "fake-auth"))]
+pub fn encode_ipc_msg(req: IpcReq) -> Result<String, AppError> {
+    let req_id: u32 = gen_req_id();
+    let encoded = encode_msg(&IpcMsg::Req { req_id, req })?;
+    Ok(encoded)
+}
 
 #[cfg(not(feature = "fake-auth"))]
 pub fn decode_ipc_msg(ipc_msg: &str) -> Result<AuthGranted, IpcError> {

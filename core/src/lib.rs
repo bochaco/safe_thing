@@ -244,7 +244,6 @@ type ActionReqCallback =
 
 pub struct SAFEthing {
     pub thing_id: String,
-    auth_uri: String,
     safe_thing_comm: SAFEthingComm,
     subscriptions: RegisteredSubscriptions,
     subsc_thread_channel_tx: Option<Sender<(String, ThingSubscriptions)>>,
@@ -275,7 +274,6 @@ impl SAFEthing {
 
         let safe_thing = SAFEthing {
             thing_id: thing_id.to_string(),
-            auth_uri: auth_uri.to_string(),
             safe_thing_comm: SAFEthingComm::new(thing_id, auth_uri)?,
             subscriptions: RegisteredSubscriptions::default(),
             subsc_thread_channel_tx: None,
@@ -333,14 +331,14 @@ impl SAFEthing {
         // Spawn thread in charge of checking subscriptions
         // and notifying the SAFEthing by invoking the callback
         // TODO: share self.safething_comm among threads?
-        let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
+        let safething_comm = self.safe_thing_comm.clone()?;
         let notifs_cb: &'static SubsNotifCallback = self.notifs_cb;
         spawn_check_subsc_thread(safething_comm, notifs_cb, self.subscriptions.clone(), rx);
 
         // Spawn thread in charge of checking for action requests
         // and invoking the corresponding callback function
         // TODO: share self.safething_comm among threads?
-        let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
+        let safething_comm = self.safe_thing_comm.clone()?;
         let action_req_cb: &'static ActionReqCallback = self.action_req_cb;
         spawn_check_new_action_reqs(safething_comm, action_req_cb);
 
@@ -462,9 +460,12 @@ impl SAFEthing {
         }
 
         // But also update subscriptions list on the network
+        // TODO: we are not making it persistent just yet
+        /*
         let subscriptions_str: String = serde_json::to_string(&self.subscriptions).unwrap();
         self.safe_thing_comm
             .set_subscriptions(subscriptions_str.as_str())?;
+        */
 
         Ok(())
     }
@@ -510,7 +511,7 @@ impl SAFEthing {
             .send_action_request(thing_id, action_req_str.as_str())?;
 
         // TODO: share self.safething_comm among threads?
-        let safething_comm = SAFEthingComm::new(&self.thing_id, &self.auth_uri)?;
+        let safething_comm = self.safe_thing_comm.clone()?;
         spawn_action_req_monitoring_thread(thing_id.to_string(), req_id, safething_comm, cb);
 
         Ok(req_id)
@@ -632,6 +633,7 @@ fn check_topic_subs_and_notify(
             // update last_report_timestamp in the subscriptions list to not
             // keep sending the notification for same (and already notified) event
             *last_report_timestamp = *event_timestamp;
+            // TODO: we may want to persist this updates on the network as well
         }
     }
 }
@@ -677,6 +679,7 @@ fn check_attrs_subs_and_notify(
             // update last_val_reported in the subscriptions list to not
             // keep sending the notification for same (and already notified) event
             *last_val_reported = value;
+            // TODO: we may want to persist this updates on the network as well
         }
     }
 }
