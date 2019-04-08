@@ -160,33 +160,60 @@ pub enum FilterOperator {
     GreaterThan,
 }
 
+impl FilterOperator {
+    pub fn eval(&self, lvalue: &str, rvalue: &str) -> bool {
+        let result = match self {
+            FilterOperator::Equal => lvalue == rvalue,
+            FilterOperator::NotEqual => lvalue != rvalue,
+            FilterOperator::LessThan => {
+                lvalue.parse::<u32>().unwrap() < rvalue.parse::<u32>().unwrap()
+            }
+            FilterOperator::GreaterThan => {
+                lvalue.parse::<u32>().unwrap() > rvalue.parse::<u32>().unwrap()
+            }
+        };
+
+        trace!(
+            "Evaluation of '{}' '{:?}' '{}' => {}",
+            lvalue,
+            self,
+            rvalue,
+            result
+        );
+
+        result
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct Filter {
-    arg_name: String,
+struct AttrSubscription {
+    attr_name: String,
     filter_op: FilterOperator,
     filter_value: String,
 }
 
-/// A topic subscription is a map from a topic name to a list of filters.
-type TopicSubscription = BTreeMap<String, Vec<Filter>>;
-
-/// An attribute subscription is simply a list of filters.
-type AttrSubscription = Vec<Filter>;
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct TopicSubscription {
+    topic: String,
+    filter_op: FilterOperator,
+    filter_value: String,
+}
 
 /// Each subscription can either be for a specific topic or for a dynamic attribute.
+/// We also keep track of the last time we checked the remote thing for any new topic event, or
+/// in the case of a attribute subscription we keep a copy of last value we reported in a
+/// notification to prevent from sending duplicate notifications.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 enum Subscription {
-    Topic(TopicSubscription),
-    Attr(AttrSubscription),
+    Topic((TopicSubscription, Timestamp)),
+    Attr((AttrSubscription, String)),
 }
 
 /// Timestamps for events are all kept in nanos elapsed since epoch
 type Timestamp = u128;
 
 /// Several subscriptions can be registered for a remote SAFEthing.
-/// We also keep track of the last time we checked the remote thing for any new event or
-/// change in the value of an attr we should be monitoring
-type ThingSubscriptions = Vec<(Subscription, Timestamp)>;
+type ThingSubscriptions = Vec<Subscription>;
 
 /// We need an structure to keep track of the subscriptions for different SAFEthings.
 /// This is a map from a SAFEthing ID to a list of subscriptions.
@@ -369,23 +396,19 @@ impl SAFEthing {
         &mut self,
         thing_id: &str,
         topic: &str,
-        filters: &[(&str, FilterOperator, &str)],
+        filter_op: FilterOperator,
+        filter_value: &str,
     ) -> ResultReturn<()> {
         // TODO: check if thing is 'Published' before subscribing,
         // and also check if it supports the topic
 
-        // We keep track of the suscriptions list in memory first
-        let mut filters_vec = Vec::new();
-        filters_vec.extend(filters.iter().map(|f| Filter {
-            arg_name: f.0.to_string(),
-            filter_op: f.1.clone(),
-            filter_value: f.2.to_string(),
-        }));
+        let topic_subs = TopicSubscription {
+            topic: topic.to_string(),
+            filter_op: filter_op.clone(),
+            filter_value: filter_value.to_string(),
+        };
 
-        let mut topic_subs: TopicSubscription = BTreeMap::new();
-        topic_subs.insert(topic.to_string(), filters_vec);
-
-        self.register_new_subscription(thing_id, Subscription::Topic(topic_subs))
+        self.register_new_subscription(thing_id, Subscription::Topic((topic_subs, gen_timestamp())))
     }
 
     /// Subscribe to a dynamic attribute published by a SAFEthing in order to receive notifications
@@ -393,20 +416,20 @@ impl SAFEthing {
     pub fn subscribe_to_attr(
         &mut self,
         thing_id: &str,
-        filters: &[(&str, FilterOperator, &str)],
+        attr_name: &str,
+        filter_op: FilterOperator,
+        filter_value: &str,
     ) -> ResultReturn<()> {
         // TODO: check if thing is 'Published' before subscribing,
-        // and also check if the attribute is dynamic
+        // and also check if the attribute is_dynamic
 
-        // We keep track of the suscriptions list in memory first
-        let mut attr_subs: AttrSubscription = Vec::new();
-        attr_subs.extend(filters.iter().map(|f| Filter {
-            arg_name: f.0.to_string(),
-            filter_op: f.1.clone(),
-            filter_value: f.2.to_string(),
-        }));
+        let attr_subs = AttrSubscription {
+            attr_name: attr_name.to_string(),
+            filter_op: filter_op.clone(),
+            filter_value: filter_value.to_string(),
+        };
 
-        self.register_new_subscription(thing_id, Subscription::Attr(attr_subs))
+        self.register_new_subscription(thing_id, Subscription::Attr((attr_subs, String::from(""))))
     }
 
     // private helper
@@ -418,19 +441,12 @@ impl SAFEthing {
         // TODO: check if thing is 'Published' before subscribing,
         // and also check if it supports the topic
 
-        // Generate timestamp for monitoring the new subscription
-        let now_timestamp = SystemTime::now();
-        let since_the_epoch = now_timestamp
-            .duration_since(UNIX_EPOCH)
-            .expect("Failed to get time since epoch");
-        let timestamp: Timestamp = since_the_epoch.as_nanos();
-
         // We keep track of the suscriptions list in memory first
         let mut thing_subs = match self.subscriptions.get(thing_id) {
             Some(subs) => subs.clone(),
             None => vec![],
         };
-        thing_subs.push((subscription, timestamp));
+        thing_subs.push(subscription);
         let thing_subs_clone = thing_subs.clone();
         self.subscriptions.insert(thing_id.to_string(), thing_subs);
 
@@ -462,11 +478,7 @@ impl SAFEthing {
             Ok(vec) => vec,
             Err(_) => vec![],
         };
-        let now_timestamp = SystemTime::now();
-        let since_the_epoch = now_timestamp
-            .duration_since(UNIX_EPOCH)
-            .expect("Failed to get time since epoch");
-        let timestamp: Timestamp = since_the_epoch.as_nanos();
+        let timestamp = gen_timestamp();
         events_vec.push((timestamp, data.to_string()));
         let events_str: String = serde_json::to_string(&events_vec).unwrap();
         self.safe_thing_comm
@@ -521,6 +533,16 @@ impl SAFEthing {
     }
 }
 
+// Helper to generate timestamp (in nanos)
+fn gen_timestamp() -> Timestamp {
+    let now_timestamp = SystemTime::now();
+    let since_the_epoch = now_timestamp
+        .duration_since(UNIX_EPOCH)
+        .expect("Failed to get time since epoch");
+
+    since_the_epoch.as_nanos()
+}
+
 // spawn a thread which takes care of monitoring topics which the SAFEthing subcribed to
 fn spawn_check_subsc_thread(
     safething_comm: SAFEthingComm,
@@ -529,83 +551,34 @@ fn spawn_check_subsc_thread(
     subsc_thread_channel_rx: Receiver<(String, ThingSubscriptions)>,
 ) {
     thread::spawn(move || {
-        let mut subscriptions = subs.clone();
+        let mut subscriptions = subs;
         loop {
             trace!("Checking subscriptions...");
-
             for (thing_id, thing_subscription) in subsc_thread_channel_rx.try_iter() {
                 debug!("New subscription to monitor: {}", thing_id);
                 subscriptions.insert(thing_id, thing_subscription);
             }
 
-            for (thing_id, thing_subs) in subscriptions.iter() {
-                for (subscription, _timestamp) in thing_subs.iter() {
+            for (thing_id, thing_subs) in subscriptions.iter_mut() {
+                for subscription in thing_subs.iter_mut() {
                     match subscription {
-                        Subscription::Topic(topic_subs) => {
-                            for (topic, _filters) in topic_subs {
-                                trace!(
-                                    "CHECKING TOPIC EVENTS FROM (thingId -> topic): {} -> {}",
-                                    thing_id,
-                                    topic
-                                );
-
-                                let events = safething_comm
-                                    .get_thing_topic_events(thing_id, topic)
-                                    .unwrap();
-                                let events_vec: Vec<(Timestamp, String)> =
-                                    match serde_json::from_str(&events) {
-                                        Ok(vec) => vec,
-                                        Err(_) => vec![],
-                                    };
-                                for (timestamp, event) in events_vec.iter() {
-                                    debug!(
-                                        "Event occurred for topic: {}, event: ({}, {})",
-                                        topic, timestamp, event
-                                    );
-                                    (notifs_cb)(
-                                        thing_id.as_str(),
-                                        topic.as_str(),
-                                        event.as_str(),
-                                        *timestamp,
-                                    );
-
-                                    // TODO: keep track of the events that were already notified based on timestamp
-                                }
-                            }
+                        Subscription::Topic((topic_subs, last_report_timestamp)) => {
+                            check_topic_subs_and_notify(
+                                thing_id,
+                                &safething_comm,
+                                notifs_cb,
+                                topic_subs,
+                                last_report_timestamp,
+                            );
                         }
-                        Subscription::Attr(attr_subs) => {
-                            for filter in attr_subs {
-                                trace!(
-                                    "CHECKING DYNAMIC ATTRIBUTES CHANGES FROM thingId: {} - {:?}",
-                                    thing_id,
-                                    filter
-                                );
-
-                                let attrs = safething_comm.get_thing_attrs(thing_id).unwrap();
-                                let attrs_vec: Vec<ThingAttr> = match serde_json::from_str(&attrs) {
-                                    Ok(vec) => vec,
-                                    Err(_) => vec![],
-                                };
-                                for ThingAttr {
-                                    attr,
-                                    value,
-                                    is_dynamic,
-                                } in attrs_vec
-                                {
-                                    if is_dynamic {
-                                        debug!(
-                                            "Dynamic attribute change occurred: {}, value: {}",
-                                            attr, value
-                                        );
-                                        (notifs_cb)(
-                                            thing_id.as_str(),
-                                            attr.as_str(),
-                                            value.as_str(),
-                                            0,
-                                        );
-                                    }
-                                }
-                            }
+                        Subscription::Attr((attr_subs, last_val_reported)) => {
+                            check_attrs_subs_and_notify(
+                                thing_id,
+                                &safething_comm,
+                                notifs_cb,
+                                attr_subs,
+                                last_val_reported,
+                            );
                         }
                     }
                 }
@@ -615,6 +588,97 @@ fn spawn_check_subsc_thread(
             thread::sleep(Duration::from_millis(SUBSCRIPTIONS_CHECK_FREQ));
         }
     });
+}
+
+fn check_topic_subs_and_notify(
+    thing_id: &String,
+    safething_comm: &SAFEthingComm,
+    notifs_cb: &'static SubsNotifCallback,
+    topic_subs: &mut TopicSubscription,
+    last_report_timestamp: &mut Timestamp,
+) {
+    let TopicSubscription {
+        topic,
+        filter_op,
+        filter_value,
+    } = topic_subs;
+    trace!(
+        "CHECKING TOPIC EVENTS FROM (thingId -> topic): {} -> {}",
+        thing_id,
+        topic
+    );
+
+    let events = safething_comm
+        .get_thing_topic_events(thing_id, topic)
+        .unwrap();
+    let events_vec: Vec<(Timestamp, String)> = match serde_json::from_str(&events) {
+        Ok(vec) => vec,
+        Err(_) => vec![],
+    };
+    for (event_timestamp, event) in events_vec.iter() {
+        let do_eval = event_timestamp > last_report_timestamp;
+        if do_eval && filter_op.eval(&event, &filter_value) {
+            debug!(
+                "Event occurred for topic: {}, event: ({}, {})",
+                topic, event_timestamp, event
+            );
+            (notifs_cb)(
+                thing_id.as_str(),
+                topic.as_str(),
+                event.as_str(),
+                *event_timestamp,
+            );
+
+            // update last_report_timestamp in the subscriptions list to not
+            // keep sending the notification for same (and already notified) event
+            *last_report_timestamp = *event_timestamp;
+        }
+    }
+}
+
+fn check_attrs_subs_and_notify(
+    thing_id: &String,
+    safething_comm: &SAFEthingComm,
+    notifs_cb: &'static SubsNotifCallback,
+    attr_subs: &mut AttrSubscription,
+    last_val_reported: &mut String,
+) {
+    let AttrSubscription {
+        attr_name,
+        filter_op,
+        filter_value,
+    } = attr_subs;
+
+    trace!(
+        "CHECKING DYNAMIC ATTRIBUTES CHANGES FROM thingId: {} - {:?}",
+        thing_id,
+        attr_name
+    );
+
+    let attrs = safething_comm.get_thing_attrs(thing_id).unwrap();
+    let attrs_vec: Vec<ThingAttr> = match serde_json::from_str(&attrs) {
+        Ok(vec) => vec,
+        Err(_) => vec![],
+    };
+    for ThingAttr {
+        attr,
+        value,
+        is_dynamic,
+    } in attrs_vec
+    {
+        let do_eval = is_dynamic && *last_val_reported != value && *attr_name == attr;
+        if do_eval && filter_op.eval(&value, &filter_value) {
+            debug!(
+                "Dynamic attribute change occurred: {}, value: {}",
+                attr, value
+            );
+            (notifs_cb)(thing_id.as_str(), attr.as_str(), value.as_str(), 0);
+
+            // update last_val_reported in the subscriptions list to not
+            // keep sending the notification for same (and already notified) event
+            *last_val_reported = value;
+        }
+    }
 }
 
 // spawn a thread which takes care of monitoring for new action requests received

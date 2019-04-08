@@ -53,7 +53,7 @@ pub fn main() {
         ThingAttr::new("model", "ArduinoDigital PRT1", false),
         ThingAttr::new("firmware", "v0.1.0", false),
         ThingAttr::new("status", "on", true),
-        ThingAttr::new("ink-level", "%", true),
+        ThingAttr::new("ink-level", "40", true),
         ThingAttr::new("service-price", "1", false),
         ThingAttr::new("payment-window", "60000", false),
         ThingAttr::new("wallet", "1KbCJfktc1JaKAwRtb42G8iNyhhh9zXRi4", false),
@@ -117,20 +117,21 @@ pub fn main() {
     // for testing as it probably doesn't make sense
     // to subscribe to its own events
     safe_thing
-        .subscribe_to_topic(&id, "printRequested", &[])
+        .subscribe_to_topic(&id, "printRequested", FilterOperator::Equal, "@me")
         .expect("Failed to subscribe to a topic");
 
     safe_thing
-        .subscribe_to_attr(&id, &[("ink-level", FilterOperator::LessThan, "10")])
+        .subscribe_to_attr(&id, "ink-level", FilterOperator::LessThan, "41")
         .expect("Failed to subscribe to a dynamic attribute");
 
-    thread::sleep(Duration::from_millis(6000));
+    thread::sleep(Duration::from_millis(3000));
     println!("SENDING NOTIFICATION");
-    let _ = safe_thing.notify("printRequested", "print job started");
+    let _ = safe_thing.notify("printRequested", "@me");
     println!("NOTIFICATION SENT");
-    thread::sleep(Duration::from_millis(20000));
 
-    /*let req_id = safe_thing
+    /*
+    thread::sleep(Duration::from_millis(20000));
+    let req_id = safe_thing
         .action_request(
             &id,
             "print",
