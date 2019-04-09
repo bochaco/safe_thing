@@ -166,10 +166,10 @@ impl FilterOperator {
             FilterOperator::Equal => lvalue == rvalue,
             FilterOperator::NotEqual => lvalue != rvalue,
             FilterOperator::LessThan => {
-                lvalue.parse::<u32>().unwrap() < rvalue.parse::<u32>().unwrap()
+                lvalue.parse::<f64>().unwrap() < rvalue.parse::<f64>().unwrap()
             }
             FilterOperator::GreaterThan => {
-                lvalue.parse::<u32>().unwrap() > rvalue.parse::<u32>().unwrap()
+                lvalue.parse::<f64>().unwrap() > rvalue.parse::<f64>().unwrap()
             }
         };
 
@@ -347,7 +347,7 @@ impl SAFEthing {
     }
 
     /// Get status of this SAFEthing
-    pub fn status(&mut self) -> ResultReturn<Status> {
+    pub fn status(&self) -> ResultReturn<Status> {
         match self.safe_thing_comm.get_status() {
             Ok(ThingStatus::Unknown) => Ok(Status::Unknown),
             Ok(ThingStatus::Connected) => Ok(Status::Connected),
@@ -363,6 +363,28 @@ impl SAFEthing {
         let attrs_str = self.safe_thing_comm.get_thing_attrs(thing_id)?;
         let attrs: Vec<ThingAttr> = serde_json::from_str(&attrs_str).unwrap();
         Ok(attrs)
+    }
+
+    /// Set a new value for an attribute, or add it if it didn't exist
+    pub fn set_attr_value(&self, attr: &str, value: &str) -> ResultReturn<()> {
+        let attrs_str = self.safe_thing_comm.get_thing_attrs(&self.thing_id)?;
+        let mut attrs: Vec<ThingAttr> = serde_json::from_str(&attrs_str).unwrap();
+        match attrs.iter().position(|ref x| x.attr == attr) {
+            Some(i) => {
+                let item = &mut attrs[i];
+                item.value = value.to_string();
+            }
+            None => attrs.push(ThingAttr {
+                attr: attr.to_string(),
+                value: value.to_string(),
+                is_dynamic: true,
+            }),
+        };
+
+        // Update attributes on the network
+        let attrs_str: String = serde_json::to_string(&attrs).unwrap();
+        self.safe_thing_comm.set_attributes(attrs_str.as_str())?;
+        Ok(())
     }
 
     /// Get list of topics supported by a SAFEthing
@@ -383,7 +405,7 @@ impl SAFEthing {
 
     /// Publish the thing making it available and operative in the network, allowing other SAFEthings
     /// to request actions, subscribe to topics, and receive notifications upon events.
-    pub fn publish(&mut self) -> ResultReturn<()> {
+    pub fn publish(&self) -> ResultReturn<()> {
         let _ = self.safe_thing_comm.set_status(ThingStatus::Published);
         info!("SAFEthing published with ID: {}", self.thing_id);
         Ok(())
@@ -472,7 +494,7 @@ impl SAFEthing {
 
     /// Notify of an event associated to an speficic topic.
     /// Eventually this can support multiple topics.
-    pub fn notify(&mut self, topic: &str, data: &str) -> ResultReturn<()> {
+    pub fn notify(&self, topic: &str, data: &str) -> ResultReturn<()> {
         info!("Notifying event for topic: {}, data: {}", topic, data);
         let events: String = self.safe_thing_comm.get_topic_events(topic)?;
         let mut events_vec: Vec<(Timestamp, String)> = match serde_json::from_str(&events) {

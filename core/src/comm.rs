@@ -93,7 +93,6 @@ impl SAFEthingComm {
 
     pub fn store_thing_entity(&mut self) -> ResultReturn<(String, u64)> {
         let xor_name = self.safe_net.gen_xor_name(self.thing_id.as_str());
-        // FIXME: set permissions to allow others to 'Insert'
         self.thing_mdata = self
             .safe_net
             .new_pub_mutable_data(xor_name, SAFE_THING_TYPE_TAG)?;

@@ -35,8 +35,7 @@ use self::safe_app::ffi::mutable_data::entry_actions::{
     mdata_entry_actions_insert, mdata_entry_actions_new, mdata_entry_actions_update,
 };
 use self::safe_app::ffi::mutable_data::permissions::{
-    mdata_permissions_insert, /*, USER_ANYONE, MDataAction*/
-    mdata_permissions_new,
+    mdata_permissions_insert, mdata_permissions_new, USER_ANYONE,
 };
 use self::safe_app::ffi::mutable_data::{mdata_mutate_entries, mdata_put, ENTRIES_EMPTY};
 
@@ -238,23 +237,35 @@ impl SAFENet {
         type_tag: u64,
     ) -> ResultReturn<MutableData> {
         let app: *const App = self.safe_app.as_ref().unwrap();
-        let perm_set = PermissionSet {
-            read: true,
-            insert: true,
-            update: true,
-            delete: true,
-            manage_permissions: true,
-        };
 
-        // Create permissions
+        // Create permissions object
         let perms_h: MDataPermissionsHandle =
             unsafe { call_1(|ud, cb| mdata_permissions_new(app, ud, cb)).unwrap() };
 
         unsafe {
+            // First set the permissions for the owner
+            let perm_set = PermissionSet {
+                read: true,
+                insert: true,
+                update: true,
+                delete: true,
+                manage_permissions: true,
+            };
             call_0(|ud, cb| {
                 mdata_permissions_insert(app, perms_h, self.sign_pub_key_h, &perm_set, ud, cb)
             })
             .unwrap();
+
+            // Now add permissions for other apps/users
+            let perm_set = PermissionSet {
+                read: true,
+                insert: true,
+                update: false,
+                delete: false,
+                manage_permissions: false,
+            };
+            call_0(|ud, cb| mdata_permissions_insert(app, perms_h, USER_ANYONE, &perm_set, ud, cb))
+                .unwrap();
         };
 
         // Create an empty public MD
