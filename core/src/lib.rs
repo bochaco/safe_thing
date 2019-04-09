@@ -521,7 +521,7 @@ impl SAFEthing {
         let mut args_vec = Vec::new();
         args_vec.extend(args.iter().map(|&arg| arg.to_string()));
         let action_req = ActionReq {
-            thing_id: thing_id.to_string(),
+            thing_id: self.thing_id.clone(),
             action: action.to_string(),
             args: args_vec,
             state: ACTION_REQUEST_INIT_STATE.to_string(),
@@ -690,7 +690,9 @@ fn check_attrs_subs_and_notify(
         is_dynamic,
     } in attrs_vec
     {
-        let do_eval = is_dynamic && *last_val_reported != value && *attr_name == attr;
+        let do_eval = is_dynamic
+            && *attr_name == attr
+            && (last_val_reported.len() == 0 || !filter_op.eval(&value, last_val_reported));
         if do_eval && filter_op.eval(&value, &filter_value) {
             debug!(
                 "Dynamic attribute change occurred: {}, value: {}",
@@ -798,7 +800,7 @@ fn spawn_action_req_monitoring_thread(
                         "Callback to notify action request new state, request id: {}, new state: {}",
                         request_id, state);
                         keep_checking = (cb)(state.as_str());
-                        debug!("Keep checking action request state? {}", keep_checking);
+                        debug!("Keep checking sent action request state? {}", keep_checking);
                     }
                 }
                 Err(_) => {
@@ -824,7 +826,10 @@ fn spawn_action_req_monitoring_thread(
             }
         }
 
-        debug!("Ending monitoring thread for request: {}", request_id);
+        debug!(
+            "Ending monitoring thread for sent action request: {}",
+            request_id
+        );
     });
 }
 
