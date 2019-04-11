@@ -7,8 +7,14 @@
 - Allow the SAFE Network community to participate in a project which creates added value for the SAFE Network, and which leads to help promoting it and to achieve mass adoption.
 - Ultimately, **have the next-gen IoT framework and communication protocol to be designed and developed by the SAFE Network community itself!**
 
-### Run example SAFEthing application
+### Incentive
+Current IoT protocols and frameworks (e.g. MQTT, CoAP) have a similar set of problems to solve, their challenges seem to be mainly related to security and NAT (to connect to the devices located in different networks without public IPs). These protocols solve this by having servers/brokers in the network, which not just adds complexity to the development of the devices' software, but it also brings in big security and privacy concerns in relation to who you are sharing the information with when your IoT things need to communicate using servers, you are forced once again to trust third parties.
 
+[The SAFE Network](https://safenetwork.tech/) has many properties which makes it an excellent solution to solve all these issues, and more, while at the same time developers and users don't need to cater for them in the first place, they can just focus on developing the main logic of the IoT devices!.
+
+This framework allows developers to integrate their IoT devices onto the SAFE Network easily, without even needing to understand much of the SAFE Network API or technicalities.
+
+### Run example SAFEthing application
 This project is in its very early stage, at the moment there is a tiny example application (`/core/examples/printer.rs`) which showcases how the SAFEthing API is intended to be used. You can run this example app with the following commands (please make sure you have rustc v1.33.0 or later):
 ```
 $ git clone https://github.com/bochaco/safe_thing.git
