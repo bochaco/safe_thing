@@ -56,20 +56,21 @@ pub struct SAFEthingComm {
     xor_name: XorNameArray,
 }
 
-impl SAFEthingComm {
-    pub fn clone(&self) -> ResultReturn<SAFEthingComm> {
+impl Clone for SAFEthingComm {
+    fn clone(&self) -> SAFEthingComm {
         let safething_comm = SAFEthingComm {
             thing_id: self.thing_id.clone(),
             /// TODO: pass a callback function for disconnection notif to reconnect
-            safe_net: SAFENet::connect(&self.thing_id, &self.auth_str)?, // Connect to the SAFE Network using the auth URI
+            safe_net: SAFENet::connect(&self.thing_id, &self.auth_str).unwrap(),
             auth_str: self.auth_str.clone(),
             thing_mdata: self.thing_mdata.clone(),
             xor_name: self.xor_name.clone(),
         };
 
-        Ok(safething_comm)
+        safething_comm
     }
-
+}
+impl SAFEthingComm {
     pub fn new(thing_id: &str, auth_uri: &str) -> ResultReturn<SAFEthingComm> {
         let auth_str: String = if auth_uri.is_empty() {
             debug!("Authorising SAFEthing app with safe_auth webservice...");

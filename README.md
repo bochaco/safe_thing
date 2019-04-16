@@ -53,8 +53,10 @@ As an example, the temperature sensor can expose a "temperature change" topic th
 When subscribing to a topic, a set of filters can optionally be provided in order to reduce the notifications to be received to just those which the subscriber is really interested in. E.g. a SAFEthing might be interested in being notified only if the current temperature goes over a threshold.
 
 TODO: subscriptions to dynamic attributes vs. topics events
-
+TODO: retained messages support
 TODO: describe subscriptions and notifications filters & parameters
+
+TODO: supporting birth/close/last-will/testament topics
 
 #### Actions
 Another way to interact with a SAFEthing is by requesting an action. The set of actions are usually static but there could be cases that a SAFEthing wants to expose some actions only in certain moments or periods of time.
