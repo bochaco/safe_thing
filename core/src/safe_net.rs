@@ -15,39 +15,32 @@
 // You should have received a copy of the GNU General Public License
 // along with the SAFEthing Framework. If not, see <https://www.gnu.org/licenses/>.
 
-extern crate log;
-
 use log::{debug, trace, warn};
 
-extern crate ffi_utils;
-extern crate safe_app;
-extern crate safe_core;
-extern crate reqwest;
-
-use self::safe_app::ffi::crypto::{app_pub_sign_key, sha3_hash};
-use self::safe_app::ffi::object_cache::{
+use safe_app::ffi::crypto::{app_pub_sign_key, sha3_hash};
+use safe_app::ffi::object_cache::{
     MDataEntryActionsHandle, MDataPermissionsHandle, SignPubKeyHandle,
 };
 #[cfg(feature = "fake-auth")]
-use self::safe_app::test_utils::create_app;
-use self::safe_app::App;
-//use self::safe_app::ffi::mdata_info::{mdata_info_new_private};
-use self::safe_app::ffi::mutable_data::entry_actions::{
+use safe_app::test_utils::create_app;
+use safe_app::App;
+//use safe_app::ffi::mdata_info::{mdata_info_new_private};
+use safe_app::ffi::mutable_data::entry_actions::{
     mdata_entry_actions_insert, mdata_entry_actions_new, mdata_entry_actions_update,
 };
-use self::safe_app::ffi::mutable_data::permissions::{
+use safe_app::ffi::mutable_data::permissions::{
     mdata_permissions_insert, mdata_permissions_new, USER_ANYONE,
 };
-use self::safe_app::ffi::mutable_data::{mdata_mutate_entries, mdata_put, ENTRIES_EMPTY};
+use safe_app::ffi::mutable_data::{mdata_mutate_entries, mdata_put, ENTRIES_EMPTY};
 
 #[cfg(feature = "use-mock-routing")]
-use self::safe_app::ffi::test_utils::test_simulate_network_disconnect;
-use self::safe_core::ffi::MDataInfo;
-//use self::safe_core::ffi::arrays::{SymSecretKey, SymNonce};
-use self::ffi_utils::test_utils::{call_0, call_1 /*, call_vec*/, call_vec_u8};
-use self::safe_core::ffi::ipc::req::PermissionSet;
+use safe_app::ffi::test_utils::test_simulate_network_disconnect;
+use safe_core::ffi::MDataInfo;
+//use safe_core::ffi::arrays::{SymSecretKey, SymNonce};
+use ffi_utils::test_utils::{call_0, call_1 /*, call_vec*/, call_vec_u8};
+use safe_core::ffi::ipc::req::PermissionSet;
 #[cfg(not(feature = "fake-auth"))]
-use self::safe_core::ipc::{AppExchangeInfo, AuthReq, IpcReq};
+use safe_core::ipc::{AppExchangeInfo, AuthReq, IpcReq};
 
 #[cfg(not(feature = "fake-auth"))]
 use std::collections::HashMap;
@@ -56,9 +49,9 @@ use std::io::Read;
 use std::{fmt, str};
 
 #[cfg(not(feature = "fake-auth"))]
-use self::reqwest::get as httpget;
+use reqwest::get as httpget;
 
-use errors::{Error, ErrorCode, ResultReturn};
+use crate::errors::{Error, ErrorCode, ResultReturn};
 
 // TODO: these should be imported from safe_app::errors::codes
 // but `errors` module is currently private
@@ -69,7 +62,7 @@ const ERR_NO_SUCH_ENTRY: i32 = -106;
 #[cfg(not(feature = "fake-auth"))]
 const SAFE_AUTH_WEBSERVICE_BASE_URL: &str = "http://localhost:41805/authorise/";
 
-use safe_net_helpers as SAFENetHelpers;
+use crate::safe_net_helpers as SAFENetHelpers;
 
 #[derive(Clone)]
 pub struct MutableData(MDataInfo);

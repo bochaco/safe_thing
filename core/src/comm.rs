@@ -15,15 +15,13 @@
 // You should have received a copy of the GNU General Public License
 // along with the SAFEthing Framework. If not, see <https://www.gnu.org/licenses/>.
 
-extern crate safe_core;
-
 use log::debug;
 
-use errors::{Error, ErrorCode, ResultReturn};
+use crate::errors::{Error, ErrorCode, ResultReturn};
 
 // Functions to access the SAFE Network
-use self::safe_core::ffi::arrays::XorNameArray;
-use safe_net::{MutableData, SAFENet};
+use safe_core::ffi::arrays::XorNameArray;
+use crate::safe_net::{MutableData, SAFENet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SAFE_THING_TYPE_TAG: u64 = 27417;

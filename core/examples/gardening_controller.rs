@@ -15,8 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with the SAFEthing Framework. If not, see <https://www.gnu.org/licenses/>.
 
-extern crate safe_thing;
-
 use safe_thing::{FilterOperator, SAFEthing, ThingAttr};
 use std::thread;
 use std::time::Duration;

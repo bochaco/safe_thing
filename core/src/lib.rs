@@ -15,26 +15,19 @@
 // You should have received a copy of the GNU General Public License
 // along with the SAFEthing Framework. If not, see <https://www.gnu.org/licenses/>.
 
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
-
-extern crate env_logger;
-extern crate log;
-
-use log::{debug, error, info, trace, warn};
-
 mod comm;
 mod errors;
 mod safe_net;
 mod safe_net_helpers;
 
+use log::{debug, error, info, trace, warn};
 use comm::{SAFEthingComm, ThingStatus};
 use errors::{Error, ErrorCode, ResultReturn};
 use std::collections::BTreeMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fmt, thread};
+use serde_derive::{Serialize, Deserialize};
 
 const THING_ID_MIN_LENGTH: usize = 5;
 const SUBSCRIPTIONS_CHECK_FREQ: u64 = 5_000;

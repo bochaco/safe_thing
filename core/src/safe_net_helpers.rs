@@ -15,24 +15,20 @@
 // You should have received a copy of the GNU General Public License
 // along with the SAFEthing Framework. If not, see <https://www.gnu.org/licenses/>.
 
-extern crate ffi_utils;
-extern crate safe_app;
-extern crate safe_core;
-
-use self::ffi_utils::test_utils::{send_via_user_data, sender_as_user_data};
-use self::ffi_utils::FfiResult;
-use self::safe_app::ffi::mutable_data::{
+use ffi_utils::test_utils::{send_via_user_data, sender_as_user_data};
+use ffi_utils::FfiResult;
+use safe_app::ffi::mutable_data::{
     entries::mdata_list_entries, mdata_entries, mdata_get_value,
 };
-use self::safe_app::App;
+use safe_app::App;
 #[cfg(not(feature = "fake-auth"))]
-use self::safe_app::AppError;
-use self::safe_core::ffi::MDataInfo;
+use safe_app::AppError;
+use safe_core::ffi::MDataInfo;
 #[cfg(not(feature = "fake-auth"))]
-use self::safe_core::ipc::resp::AuthGranted;
+use safe_core::ipc::resp::AuthGranted;
 #[cfg(not(feature = "fake-auth"))]
-use self::safe_core::ipc::{decode_msg, encode_msg, gen_req_id, IpcError, IpcMsg, IpcReq, IpcResp};
-use self::safe_core::MDataEntry;
+use safe_core::ipc::{decode_msg, encode_msg, gen_req_id, IpcError, IpcMsg, IpcReq, IpcResp};
+use safe_core::MDataEntry;
 use std::os::raw::c_void;
 use std::slice;
 use std::sync::mpsc;

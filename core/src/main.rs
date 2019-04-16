@@ -16,7 +16,6 @@
 // along with the SAFEthing Framework. If not, see <https://www.gnu.org/licenses/>.
 
 // WebService REST API
-extern crate safe_thing;
 
 fn main() {
     println!("Starting up web service...");
