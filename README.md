@@ -15,14 +15,14 @@ Current IoT protocols and frameworks (e.g. MQTT, CoAP) have a similar set of pro
 This framework allows developers to integrate their IoT devices onto the SAFE Network easily, without even needing to understand much of the SAFE Network API or technicalities.
 
 ### Run example SAFEthing applications
-This project is in its very early stage, however there is already a couple of SAFEthing applications which showcase how the SAFEthing API can be used to implement a gardening system, having one SAFEthing which manages a soil moisture sensor and a water valve ([core/examples/gardening_device.rs](core/examples/gardening_device.rs)), and a second SAFEthing which acts as a monitoring and controller device for the gardening system ([core/examples/gardening_controller.rs](core/examples/gardening_controller.rs)).
+This project is in its very early stage, however there are already a couple of SAFEthing applications which showcase how the SAFEthing API can be used to implement a gardening system, having one SAFEthing which manages a soil moisture sensor and a water valve ([core/examples/gardening_device.rs](core/examples/gardening_device.rs)), and a second SAFEthing which acts as a monitoring and controller device for the gardening system ([core/examples/gardening_controller.rs](core/examples/gardening_controller.rs)).
 
-Although the following is a summary of what these applications try to demonstrate, there are many more details of their functionality commented in the code itself, so please refer to them for further explanations.
+Although the following is a summary of what these applications try to demonstrate, there are many more details of their functionality commented out in the code itself, so please refer to them for further explanations.
 
 #### Prerequisites
 - In order to be able to run these example applications, please make sure you have rustc v1.33.0 or later.
 
-- You'll also need the [SAFE Authenticator CLI](https://github.com/maidsafe/safe-authenticator-cli) running locally and exposing its WebService interface for authorising applications, and also be logged in to an account created on the mock network (i.e. `MockVault` file). Each of these SAFEthings applications will send an authorisation request to `http://localhost:41805/authorise/` endpoint which can be made available by following the instructions in [this section of the safe_auth CLI documentation](https://github.com/maidsafe/safe-authenticator-cli#execute-authenticator-service-exposing-restful-api) making sure the port number set is `41805`.
+- You'll also need the [SAFE Authenticator CLI](https://github.com/maidsafe/safe-authenticator-cli) running locally and exposing its WebService interface for authorising applications, and also be logged in to a SAFE account created on the mock network (i.e. `MockVault` file). Each of these SAFEthings applications will send an authorisation request to `http://localhost:41805/authorise/` endpoint which can be made available by following the instructions in [this section of the safe_auth CLI documentation](https://github.com/maidsafe/safe-authenticator-cli#execute-authenticator-service-exposing-restful-api), making sure the port number you set is `41805`.
 
 The first thing to be done is clone this repository and switch to the `core` subdirectory of it:
 ```
@@ -32,17 +32,26 @@ $ cd ./safe_thing/core
 
 Now you can run one of the two SAFEthings, the one which manages a soil moisture sensor and water valve, by executing the following command:
 ```
-$ cargo run --features "fake-auth use-mock-routing" --example gardening_device
+$ cargo run --features use-mock-routing --example gardening_device
 ```
 
 This SAFEthing application will publish a few attributes, e.g. the `moisture-level` and `valve-state` dynamic attributes, a couple of topics that other SAFEthing can register to, `VeryWetAlarm` and `VeryDryAlarm`, as well as a couple of actions which can be triggered, `OpenValve` and `CloseValve`, to open and close the water valve respectively. This SAFEthing application also simulates the soil moisture level being increased or decreased depending if the water valve is open or closed, just for the sake of being able to understand how another SAFEthing can subscribe to topics and dynamic attributes, as well as send action requests to it.
 
-It is now time to run the second SAFEthing, the gardening controller. To do so please open a new terminal window, making sure you are still in the same `safe_thing/core/` directory, run it with the following command:
+It is now time to run the second SAFEthing, the gardening controller. In order to do so, please open a new terminal window, make sure you are still in the same `safe_thing/core/` directory, and run it with the following command:
 ```
-$ cargo run --features "fake-auth use-mock-routing" --example gardening_controller
+$ cargo run --features use-mock-routing --example gardening_controller
 ```
 
-The gardening controller SAFEthing will subscribe to the dynamic attributes and topics exposed by the gardening device, monitoring when the soil moisture level goes below a certain threshold. In such a case would send a request to open the water valve until the moisture level increases an upper level which is meant to be healthy for our plants, sending a second request to close the water valve. This cycle will repeat indefinitely as the soil moisture level will automatically start dropping when the water valve is close.
+The gardening controller SAFEthing will subscribe to the dynamic attributes and topics exposed by the gardening device (the first SAFEthing application we ran), monitoring if the soil moisture level goes below a certain threshold. In such a case, it will send a request to open the water valve until the moisture level reaches an upper level which is meant to be healthy for our plants, at which point it will be sending a second request to close the water valve. This cycle will repeat indefinitely as the soil moisture level will automatically start dropping when the water valve is close.
+
+You can see the output of both SAFEthing applications (in the two terminal consoles) to see how they react to the notifications and action requests being sent between them. If you prefer to see more level of details, you can enable any of the logging level, e.g. to see the `debug` level of logs generated by the `safe_thing` framework you can instead run them with the following commands:
+```
+$ RUST_LOG=safe_thing=debug cargo run --features fake-auth use-mock-routing --example gardening_device
+```
+and
+```
+$ RUST_LOG=safe_thing=debug cargo run --features use-mock-routing --example gardening_controller
+```
 
 ### The Library and API
 The SAFEthing library is composed of several parts but its core is just a Rust crate with a simple and well defined Rust API.

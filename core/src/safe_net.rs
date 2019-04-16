@@ -22,6 +22,7 @@ use log::{debug, trace, warn};
 extern crate ffi_utils;
 extern crate safe_app;
 extern crate safe_core;
+extern crate reqwest;
 
 use self::safe_app::ffi::crypto::{app_pub_sign_key, sha3_hash};
 use self::safe_app::ffi::object_cache::{
@@ -53,6 +54,9 @@ use std::collections::HashMap;
 #[cfg(not(feature = "fake-auth"))]
 use std::io::Read;
 use std::{fmt, str};
+
+#[cfg(not(feature = "fake-auth"))]
+use self::reqwest::get as httpget;
 
 use errors::{Error, ErrorCode, ResultReturn};
 
@@ -139,7 +143,7 @@ impl SAFENet {
                 );
                 let authenticator_webservice_url =
                     SAFE_AUTH_WEBSERVICE_BASE_URL.to_string() + &auth_req_str;
-                let mut res = reqwest::get(&authenticator_webservice_url).unwrap();
+                let mut res = httpget(&authenticator_webservice_url).unwrap();
                 let mut auth_res = String::new();
                 res.read_to_string(&mut auth_res).unwrap();
                 debug!("Authorisation response: {}", auth_res);
