@@ -14,13 +14,35 @@ Current IoT protocols and frameworks (e.g. MQTT, CoAP) have a similar set of pro
 
 This framework allows developers to integrate their IoT devices onto the SAFE Network easily, without even needing to understand much of the SAFE Network API or technicalities.
 
-### Run example SAFEthing application
-This project is in its very early stage, at the moment there is a tiny example application (`/core/examples/printer.rs`) which showcases how the SAFEthing API is intended to be used. You can run this example app with the following commands (please make sure you have rustc v1.33.0 or later):
+### Run example SAFEthing applications
+This project is in its very early stage, however there is already a couple of SAFEthing applications which showcase how the SAFEthing API can be used to implement a gardening system, having one SAFEthing which manages a soil moisture sensor and a water valve ([core/examples/gardening_device.rs](core/examples/gardening_device.rs)), and a second SAFEthing which acts as a monitoring and controller device for the gardening system ([core/examples/gardening_controller.rs](core/examples/gardening_controller.rs)).
+
+Although the following is a summary of what these applications try to demonstrate, there are many more details of their functionality commented in the code itself, so please refer to them for further explanations.
+
+#### Prerequisites
+- In order to be able to run these example applications, please make sure you have rustc v1.33.0 or later.
+
+- You'll also need the [SAFE Authenticator CLI](https://github.com/maidsafe/safe-authenticator-cli) running locally and exposing its WebService interface for authorising applications, and also be logged in to an account created on the mock network (i.e. `MockVault` file). Each of these SAFEthings applications will send an authorisation request to `http://localhost:41805/authorise/` endpoint which can be made available by following the instructions in [this section of the safe_auth CLI documentation](https://github.com/maidsafe/safe-authenticator-cli#execute-authenticator-service-exposing-restful-api) making sure the port number set is `41805`.
+
+The first thing to be done is clone this repository and switch to the `core` subdirectory of it:
 ```
 $ git clone https://github.com/bochaco/safe_thing.git
 $ cd ./safe_thing/core
-$ cargo run --example printer --features "fake-auth use-mock-routing"
 ```
+
+Now you can run one of the two SAFEthings, the one which manages a soil moisture sensor and water valve, by executing the following command:
+```
+$ cargo run --features "fake-auth use-mock-routing" --example gardening_device
+```
+
+This SAFEthing application will publish a few attributes, e.g. the `moisture-level` and `valve-state` dynamic attributes, a couple of topics that other SAFEthing can register to, `VeryWetAlarm` and `VeryDryAlarm`, as well as a couple of actions which can be triggered, `OpenValve` and `CloseValve`, to open and close the water valve respectively. This SAFEthing application also simulates the soil moisture level being increased or decreased depending if the water valve is open or closed, just for the sake of being able to understand how another SAFEthing can subscribe to topics and dynamic attributes, as well as send action requests to it.
+
+It is now time to run the second SAFEthing, the gardening controller. To do so please open a new terminal window, making sure you are still in the same `safe_thing/core/` directory, run it with the following command:
+```
+$ cargo run --features "fake-auth use-mock-routing" --example gardening_controller
+```
+
+The gardening controller SAFEthing will subscribe to the dynamic attributes and topics exposed by the gardening device, monitoring when the soil moisture level goes below a certain threshold. In such a case would send a request to open the water valve until the moisture level increases an upper level which is meant to be healthy for our plants, sending a second request to close the water valve. This cycle will repeat indefinitely as the soil moisture level will automatically start dropping when the water valve is close.
 
 ### The Library and API
 The SAFEthing library is composed of several parts but its core is just a Rust crate with a simple and well defined Rust API.
@@ -85,62 +107,85 @@ TODO
 ##### Wallet
 TODO
 
-### Example of SAFEthing Rust client
+### Snippet of SAFEthing Rust client
+
+The following is a snippet of how a SAFEthing client application looks like, please refer to the [core examples folder](core/examples/) to see the complete code, and refer to [Run example SAFEthing applications](#run-example-safething-applications) for instructions to run them.
 
 ``` rust
 extern crate safe_thing;
 
-use safe_thing::{SAFEthing, ThingAttr, Topic, ActionDef, AccessType};
-
-fn subscriptions_notif(thing_id: &str, topic: &str, data: &str) {
-    println!(
-        "New event: Notification received from thing_id: {}, topic: {}, data: {}",
-        thing_id, topic, data
-    )
-}
+use safe_thing::{AccessType, ActionDef, SAFEthing, ThingAttr, Topic};
 
 pub fn main() {
-    let id = "printer-serial-number-01010101";
+    // Let's create a SAFEthing id for the gardening device, this could be the device serial number
+    let id = "gardening-device-serial-number-01010101";
 
-    let auth_uri = "safe-bmv0lm1hawrzywzllmv4yw1wbgvzlm1krxhhbxbszq:AQAAAOIDI_gAAAAAAAAAACAAAAAAAAAAGWzDHH2GG-TUtS_qLvytHNXrAPWGtI6QLDuoP28EE_0gAAAAAAAAALPyoRvbtvPKs9bWYhkdhfkltybFTBJerAWEARetysrtvsjSRTHVRTA_a6ysxSGIUWz9pOLlq9hRMM-EJQctDpVkhRTXPar-W0AAAAAAAAAA-O8HsVV5ZZbiAwWTTFXQeNX7pSYtLmZXRHnrdVyXZvv_a6ysxSGIUWz9pOLlq9hRMM-EJQctDpVkhRTXPar-WyAAAAAAAAAAUnTeCf39C-KDfioarbgDedqYhu_ZEpCHK_CatkiYNFUgAAAAAAAAAOTkFE7GibxaH0egTV1NtczggZkyAsCVRY6AcbceiSNfAAAAAAAAAAAAAAAAAAAAAAAAAAAAMCralz2EJh0ML2wMZLBhh0hELI1dIQUlVtaWHqIClqmYOgAAAAAAABgAAAAAAAAA2lo16ByCIq4SnojMIRPV_RSvQIOelGUD";
+    // Let's have the SAFEthing framework to authorise the device with any
+    // available SAFE Authentiactor rather than providing the authorisation credentials
+    let auth_uri = "";
 
     let attributes = [
-        ThingAttr::new("name", "SAFEthing Printer"),
-        ThingAttr::new("model", "ArduinoDigital PRT1"),
-        ThingAttr::new("firmware", "v0.1.0"),
-        ThingAttr::new("status", "on"),
-        ThingAttr::new("ink-level", "%"),
+        ThingAttr::new("name", "SAFEthing Gardening Device", false),
+        ThingAttr::new("firmware", "v0.1.0", false),
+        ThingAttr::new("moisture-level", "", true),
+        ThingAttr::new("pressure-psi", "50", true),
+        ThingAttr::new("valve_state", "closed", true),
     ];
 
     let topics = [
-        Topic::new("printRequested", AccessType::All),
-        Topic::new("printPaid", AccessType::All),
-        Topic::new("printSuccess", AccessType::All),
-        Topic::new("printFail", AccessType::All),
-        Topic::new("outOfInk", AccessType::All),
+        Topic::new("VeryDryAlarm", AccessType::All),
+        Topic::new("VeryWetAlarm", AccessType::All),
     ];
 
     let actions = [
-        ActionDef::new("turnOn", AccessType::Owner, &[]),
-        ActionDef::new("turnOff", AccessType::Owner, &["timer"]),
-        ActionDef::new("print", AccessType::All, &["data", "deliverTo"]),
-        ActionDef::new("orderInk", AccessType::Owner, &[]),
+        ActionDef::new("OpenValve", AccessType::All, &["psi"]),
+        ActionDef::new("CloseValve", AccessType::All, &[]),
     ];
 
+    // Let's create an instance of SAFEthing for this device.
+    // We already provide the two callback functions to be called
+    // for subcriptions notifications and action requests respectively.
     let mut safe_thing =
         SAFEthing::new(&id, auth_uri, &subscriptions_notif, &action_request_notif).unwrap();
 
-    match safe_thing.register(&attributes, &topics, &actions) {
-        Ok(_) => println!("Printer registered on the network"),
-        Err(e) => println!("Failed to register SAFEthing: {}", e)
-    }
+    // Register the SAFEthing on the network, this won't make it active yet
+    // but it will just store the device's data onto the network as a SAFEthing entity
+    safe_thing
+        .register(&attributes, &topics, &actions)
+        .map(|()| println!("Gardening device registered on the network"))
+        .unwrap();
 
-    match safe_thing.status() {
-        Ok(status) => println!("Current status: {}", status),
-        Err(e) => println!("Failed getting status: {}", e)
-    }
+    // Let's now make it active and ready for receiving action requests from other SAFEthings
+    safe_thing.publish().expect("Failed to publish SAFEthing");
 
-    ...
+    // We now go into an infinite loop which contains the main logic of this device
+    loop {
+        let current_moisture_level: f32 = /* get soil moisture level from sensor reading */
+
+        // Let's keep the published dynamic attribute up to date for any
+        // other SAFEthing to be notified if it's interested in knowing about the new value
+        println!(
+            "Updating value of 'moisture_level' dynamic attribute to '{}'",
+            current_moisture_level
+        );
+        safe_thing
+            .set_attr_value("moisture-level", &current_moisture_level.to_string())
+            .unwrap();
+
+        // This device also supports two topics (VeryWetAlarm and VeryDryAlarm) that
+        // other SAFEthings can register to in order to receive notifications when it detects
+        // that the soil moisture level goes beyond thresholds. Thus we should check the current
+        // moisture level and send the notification for the corresponding topic.
+        if current_moisture_level > 8.0 {
+            let _ = safe_thing.notify("VeryWetAlarm", "");
+        } else if current_moisture_level < 3.0 {
+            let _ = safe_thing.notify("VeryDryAlarm", "");
+        }
+
+        // Let's wait for some time before going into a new cycle of reading the
+        // current soil moisture level and publishing the new value
+        thread::sleep(Duration::from_millis(3000));
+    }
 }
 ```
 

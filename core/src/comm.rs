@@ -196,6 +196,7 @@ impl SAFEthingComm {
             .mutable_data_get_value(&thing_mdata, SAFE_THING_ENTRY_K_ACTIONS)
     }
 
+    #[allow(dead_code)]
     pub fn set_subscriptions(&self, subscriptions: &str) -> ResultReturn<()> {
         self.safe_net.mutable_data_set_value(
             &self.thing_mdata,
