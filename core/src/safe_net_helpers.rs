@@ -17,9 +17,7 @@
 
 use ffi_utils::test_utils::{send_via_user_data, sender_as_user_data};
 use ffi_utils::FfiResult;
-use safe_app::ffi::mutable_data::{
-    entries::mdata_list_entries, mdata_entries, mdata_get_value,
-};
+use safe_app::ffi::mutable_data::{entries::mdata_list_entries, mdata_entries, mdata_get_value};
 use safe_app::App;
 #[cfg(not(feature = "fake-auth"))]
 use safe_app::AppError;

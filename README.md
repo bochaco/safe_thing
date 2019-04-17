@@ -128,7 +128,7 @@ pub fn main() {
     let id = "gardening-device-serial-number-01010101";
 
     // Let's have the SAFEthing framework to authorise the device with any
-    // available SAFE Authentiactor rather than providing the authorisation credentials
+    // available SAFE Authenticator rather than providing the authorisation credentials
     let auth_uri = "";
 
     let attributes = [
@@ -136,7 +136,7 @@ pub fn main() {
         ThingAttr::new("firmware", "v0.1.0", false),
         ThingAttr::new("moisture-level", "", true),
         ThingAttr::new("pressure-psi", "50", true),
-        ThingAttr::new("valve_state", "closed", true),
+        ThingAttr::new("valve-state", "closed", true),
     ];
 
     let topics = [
@@ -151,7 +151,7 @@ pub fn main() {
 
     // Let's create an instance of SAFEthing for this device.
     // We already provide the two callback functions to be called
-    // for subcriptions notifications and action requests respectively.
+    // for subscriptions notifications and action requests respectively.
     let mut safe_thing =
         SAFEthing::new(&id, auth_uri, &subscriptions_notif, &action_request_notif).unwrap();
 
@@ -172,17 +172,17 @@ pub fn main() {
         // Let's keep the published dynamic attribute up to date for any
         // other SAFEthing to be notified if it's interested in knowing about the new value
         println!(
-            "Updating value of 'moisture_level' dynamic attribute to '{}'",
+            "Updating value of 'moisture-level' dynamic attribute to '{}'",
             current_moisture_level
         );
         safe_thing
             .set_attr_value("moisture-level", &current_moisture_level.to_string())
             .unwrap();
 
-        // This device also supports two topics (VeryWetAlarm and VeryDryAlarm) that
+        // This device also supports two topics ("VeryWetAlarm" and "VeryDryAlarm") that
         // other SAFEthings can register to in order to receive notifications when it detects
-        // that the soil moisture level goes beyond thresholds. Thus we should check the current
-        // moisture level and send the notification for the corresponding topic.
+        // that the soil moisture level goes beyond certain thresholds. Thus we should check
+        // the current moisture level and send the notification for the corresponding topic accordingly.
         if current_moisture_level > 8.0 {
             let _ = safe_thing.notify("VeryWetAlarm", "");
         } else if current_moisture_level < 3.0 {

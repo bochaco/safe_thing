@@ -20,14 +20,14 @@ mod errors;
 mod safe_net;
 mod safe_net_helpers;
 
-use log::{debug, error, info, trace, warn};
 use comm::{SAFEthingComm, ThingStatus};
 use errors::{Error, ErrorCode, ResultReturn};
+use log::{debug, error, info, trace, warn};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fmt, thread};
-use serde_derive::{Serialize, Deserialize};
 
 const THING_ID_MIN_LENGTH: usize = 5;
 const SUBSCRIPTIONS_CHECK_FREQ: u64 = 5_000;

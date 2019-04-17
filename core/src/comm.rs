@@ -20,8 +20,8 @@ use log::debug;
 use crate::errors::{Error, ErrorCode, ResultReturn};
 
 // Functions to access the SAFE Network
-use safe_core::ffi::arrays::XorNameArray;
 use crate::safe_net::{MutableData, SAFENet};
+use safe_core::ffi::arrays::XorNameArray;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SAFE_THING_TYPE_TAG: u64 = 27417;
