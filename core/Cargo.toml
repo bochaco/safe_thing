@@ -12,7 +12,7 @@ keywords = ["IoT", "SAFE", "SAFENetwork", "communication", "descentralised"]
 edition = "2018"
 
 [features]
-use-mock-routing = ["safe_app/use-mock-routing"]
+mock-network = ["safe_app/use-mock-routing"]
 fake-auth = ["safe_app/testing"]
 
 [dependencies]
